@@ -27,9 +27,12 @@
     selection: hold
 
 # The config is written once. GPU Operator / AMD GPU Operator add their runtimes afterwards,
-# and re-running B0 must not clobber that.
+# and re-running B0 must not clobber that. The marker is a separate file: GPU Operator's
+# toolkit rewrites config.toml and drops comments, so a marker inside it is lost.
 - name: Check whether config.toml was already written by this role
-  ansible.builtin.command: "grep -q '^# managed-by: a-demo' /etc/containerd/config.toml"
+  ansible.builtin.shell: >-
+    test -e /etc/containerd/.a-demo-managed
+    || grep -q '^# managed-by: a-demo' /etc/containerd/config.toml
   register: containerd_managed
   changed_when: false
   failed_when: false
@@ -49,6 +52,12 @@
       {{ containerd_default.stdout | regex_replace('SystemdCgroup = false', 'SystemdCgroup = true') }}
   when: containerd_managed.rc != 0
   notify: Restart containerd
+
+- name: Record that config.toml has been written
+  ansible.builtin.copy:
+    dest: /etc/containerd/.a-demo-managed
+    content: "config.toml written by infra/ansible (roles/containerd); later edits belong to GPU operators\n"
+    mode: "0644"
 
 - name: Confirm the systemd cgroup driver is set
   ansible.builtin.command: grep -q 'SystemdCgroup = true' /etc/containerd/config.toml
