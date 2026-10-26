@@ -18,6 +18,7 @@
       - "kubelet={{ kubernetes_package_version }}"
       - "kubeadm={{ kubernetes_package_version }}"
       - "kubectl={{ kubernetes_package_version }}"
+      - "cri-tools={{ cri_tools_package_version }}" # crictl, configured by the containerd role
     update_cache: true
     allow_downgrade: true
 
@@ -25,7 +26,7 @@
   ansible.builtin.dpkg_selections:
     name: "{{ item }}"
     selection: hold
-  loop: [kubelet, kubeadm, kubectl]
+  loop: [kubelet, kubeadm, kubectl, cri-tools]
 
 - name: Enable kubelet (it crash-loops until kubeadm init/join, which is expected)
   ansible.builtin.systemd_service:
