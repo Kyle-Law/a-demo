@@ -22,7 +22,7 @@ Priority order when trading off effort: ops agent loop > Slurm depth > GPU stack
 | C2 | `c2` | CPU + A6000 48GB | Inference replica + Slinky training |
 | C3 | `c3` | 3 CPU nodes | Ops control plane: agent, executor, Argo CD, observability |
 
-Hosts are provisioned by hand (MI300X: HotAisle; CPU/A100/A6000: Prime Intellect) and reached over SSH on public IPs. Addressing plan: `infra/ansible/README.md`.
+Hosts are provisioned by hand (MI300X: HotAisle; CPU/A100/A6000: Prime Intellect) and reached over SSH on public IPs. Kubeconfigs: `~/.kube/a-demo/<cluster>.yaml`. Addressing plan: `infra/ansible/README.md`.
 
 ### C1 accelerator layout
 

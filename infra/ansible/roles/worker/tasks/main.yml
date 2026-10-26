@@ -1,0 +1,38 @@
+- name: Check whether the node has already joined
+  ansible.builtin.stat:
+    path: /etc/kubernetes/kubelet.conf
+  register: worker_kubelet_conf
+
+- name: Join the cluster
+  when: not worker_kubelet_conf.stat.exists
+  block:
+    - name: Create a short-lived bootstrap token on {{ control_plane_host }}
+      ansible.builtin.command: kubeadm token create --ttl 15m --print-join-command
+      register: worker_join_command
+      delegate_to: "{{ control_plane_host }}"
+      changed_when: true
+      no_log: true
+
+    - name: Parse token and CA hash
+      ansible.builtin.set_fact:
+        worker_join_token: "{{ worker_join_command.stdout | regex_search('--token (\\S+)', '\\1') | first }}"
+        worker_join_ca_hash: "{{ worker_join_command.stdout | regex_search('--discovery-token-ca-cert-hash (\\S+)', '\\1') | first }}"
+      no_log: true
+
+    - name: Render kubeadm join config
+      ansible.builtin.template:
+        src: kubeadm-join.yaml.j2
+        dest: /etc/kubernetes/kubeadm-join.yaml
+        mode: "0600"
+      no_log: true
+
+    - name: Join
+      ansible.builtin.command: kubeadm join --config /etc/kubernetes/kubeadm-join.yaml
+      args:
+        creates: /etc/kubernetes/kubelet.conf
+
+  always:
+    - name: Remove join config (contains the bootstrap token)
+      ansible.builtin.file:
+        path: /etc/kubernetes/kubeadm-join.yaml
+        state: absent
