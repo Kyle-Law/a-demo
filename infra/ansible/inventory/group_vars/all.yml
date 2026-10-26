@@ -1,3 +1,10 @@
+# Versions, checked 2026-10-27. Kubernetes is 1.36 because Cilium 1.20 supports 1.33-1.36
+# and GPU Operator v26.7 supports 1.33-1.37.
+kubernetes_minor: "1.36"
+kubernetes_version: "1.36.5"
+kubernetes_package_version: "1.36.5-1.1"
+containerd_version: "2.4.2" # default sandbox image pause:3.10.2 matches kubeadm 1.36
+
 cluster_names: [c1, c2, c3]
 
 # Host-level WireGuard mesh spanning every node of every cluster, across providers.
