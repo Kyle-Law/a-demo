@@ -1,0 +1,76 @@
+- name: Check k8sServiceHost matches this control plane's wg_ip
+  ansible.builtin.assert:
+    that: cilium_cluster_values.k8sServiceHost == wg_ip
+    fail_msg: "platform/cilium/values-{{ cluster_name }}.yaml has k8sServiceHost {{ cilium_cluster_values.k8sServiceHost }}, expected {{ wg_ip }}"
+  vars:
+    cilium_cluster_values: "{{ lookup('ansible.builtin.file', cilium_values_dir ~ '/values-' ~ cluster_name ~ '.yaml') | from_yaml }}"
+
+- name: Download Helm {{ helm_version }}
+  ansible.builtin.get_url:
+    url: "https://get.helm.sh/helm-{{ helm_version }}-linux-amd64.tar.gz"
+    checksum: "sha256:https://get.helm.sh/helm-{{ helm_version }}-linux-amd64.tar.gz.sha256sum"
+    dest: "/tmp/helm-{{ helm_version }}.tar.gz"
+    mode: "0644"
+
+- name: Install Helm
+  ansible.builtin.unarchive:
+    src: "/tmp/helm-{{ helm_version }}.tar.gz"
+    dest: /usr/local/bin
+    remote_src: true
+    include: [linux-amd64/helm]
+    extra_opts: [--strip-components=1]
+
+- name: Download cilium CLI {{ cilium_cli_version }}
+  ansible.builtin.get_url:
+    url: "https://github.com/cilium/cilium-cli/releases/download/{{ cilium_cli_version }}/cilium-linux-amd64.tar.gz"
+    checksum: "sha256:https://github.com/cilium/cilium-cli/releases/download/{{ cilium_cli_version }}/cilium-linux-amd64.tar.gz.sha256sum"
+    dest: "/tmp/cilium-cli-{{ cilium_cli_version }}.tar.gz"
+    mode: "0644"
+
+- name: Install cilium CLI
+  ansible.builtin.unarchive:
+    src: "/tmp/cilium-cli-{{ cilium_cli_version }}.tar.gz"
+    dest: /usr/local/bin
+    remote_src: true
+
+- name: Copy Cilium values
+  ansible.builtin.copy:
+    src: "{{ cilium_values_dir }}/{{ item }}"
+    dest: /etc/a-demo/cilium/
+    mode: "0644"
+  loop: [values.yaml, "values-{{ cluster_name }}.yaml"]
+
+- name: Check for an existing Cilium release
+  ansible.builtin.command: helm status cilium --namespace kube-system --kube-context {{ kube_context }}
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: cilium_release
+  changed_when: false
+  failed_when: false
+
+# Install only. From B1 on, Argo CD owns this release and Ansible must not upgrade it.
+- name: Install Cilium {{ cilium_version }}
+  ansible.builtin.command: >-
+    helm install cilium cilium
+    --repo https://helm.cilium.io
+    --version {{ cilium_version }}
+    --namespace kube-system
+    --kube-context {{ kube_context }}
+    --values /etc/a-demo/cilium/values.yaml
+    --values /etc/a-demo/cilium/values-{{ cluster_name }}.yaml
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  when: cilium_release.rc != 0
+  changed_when: true
+
+- name: Wait for Cilium to report healthy
+  ansible.builtin.command: cilium status --wait --wait-duration 10m --context {{ kube_context }}
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  changed_when: false
+
+- name: Wait for every node to be Ready
+  ansible.builtin.command: kubectl --context {{ kube_context }} wait node --all --for=condition=Ready --timeout=5m
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  changed_when: false

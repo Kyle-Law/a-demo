@@ -45,6 +45,19 @@ ansible-playbook site.yml --limit c2
 ansible-playbook site.yml
 ```
 
+The playbook is safe to re-run. `kubeadm init/join` are skipped on nodes that already joined, and the containerd config is written only once, so later GPU operator edits survive a re-run. The Cilium Helm release is installed only if it's absent: from B1 on, Argo CD owns it, and changes go through `platform/cilium/` in Git.
+
+## Verify (B0 "done when")
+
+Admin kubeconfigs are written to `~/.kube/a-demo/<cluster>.yaml`, outside the repo, with context names `c1`, `c2`, `c3`.
+
+```bash
+export KUBECONFIG=~/.kube/a-demo/c1.yaml:~/.kube/a-demo/c2.yaml:~/.kube/a-demo/c3.yaml
+brew install cilium-cli          # once
+for c in c1 c2 c3; do cilium --context $c status --wait; done
+kubectl --context c2 get nodes -o wide   # INTERNAL-IP should be the 172.30.x.x wg IP
+```
+
 ## Replacing a host
 
 On-demand hosts come back with new public IPs. Update `ansible_host` and keep the same `wg_ip`. If it's a worker, delete the old node first (`kubectl --context <c> delete node <name>`, after asking). Then re-run the playbook without `--limit` so every peer learns the new endpoint. If it's a control plane, the cluster has to be rebuilt.
