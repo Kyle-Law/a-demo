@@ -1,0 +1,30 @@
+# Turning MIG mode on needs a GPU reset. On Massed Compute VMs the reset always fails
+# ("In use by another client"), and GPU Operator's mig-manager cannot reboot the host from its
+# container: with WITH_REBOOT=true it stops kubelet, then its reboot only re-executes systemd,
+# leaving the node NotReady. So MIG mode is turned on here, with a real reboot, before the node
+# joins. mig-manager then only creates the slices (platform/gpu-operator), which needs no reset.
+
+- name: Read MIG mode (current, pending)
+  ansible.builtin.command: nvidia-smi --query-gpu=mig.mode.current,mig.mode.pending --format=csv,noheader
+  register: nvidia_mig_mode
+  changed_when: false
+
+- name: Turn MIG mode on (takes effect after a reset or reboot)
+  ansible.builtin.command: nvidia-smi -mig 1
+  when: nvidia_mig_mode.stdout_lines | map('split', ', ') | map('last') | unique != ['Enabled']
+  changed_when: true
+
+- name: Reboot to apply MIG mode
+  ansible.builtin.reboot:
+    reboot_timeout: 900
+  when: nvidia_mig_mode.stdout_lines | map('split', ', ') | map('first') | unique != ['Enabled']
+
+- name: Read MIG mode after reboot
+  ansible.builtin.command: nvidia-smi --query-gpu=mig.mode.current --format=csv,noheader
+  register: nvidia_mig_mode_after
+  changed_when: false
+
+- name: Require MIG mode on for every GPU
+  ansible.builtin.assert:
+    that: nvidia_mig_mode_after.stdout_lines | unique == ['Enabled']
+    fail_msg: "MIG mode is {{ nvidia_mig_mode_after.stdout_lines }} after reboot"

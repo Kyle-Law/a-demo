@@ -1,0 +1,17 @@
+# Selects the MIG layout by GPU model, so a replacement A100 gets the same slices without a
+# hand-applied label. NFD (deployed by the GPU Operator) sets nvidia.com/mig.config, and
+# mig-manager applies the matching entry of migManager.config in ../values.yaml.
+apiVersion: nfd.k8s-sigs.io/v1alpha1
+kind: NodeFeatureRule
+metadata:
+  name: a-demo-mig-layout
+spec:
+  rules:
+    - name: a100-80gb-pcie
+      labels:
+        nvidia.com/mig.config: a-demo-c1
+      matchFeatures:
+        - feature: pci.device
+          matchExpressions:
+            vendor: {op: In, value: ["10de"]}
+            device: {op: In, value: ["20b5"]} # A100 PCIe 80GB (lspci -nn)
