@@ -9,3 +9,5 @@
     - common
     - wireguard
     - firewall
+    - containerd
+    - kubernetes
