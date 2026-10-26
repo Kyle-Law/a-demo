@@ -1,0 +1,14 @@
+# B1: Argo CD on C3, managing C1, C2 and itself. Run after site.yml.
+# Only spokes reachable in this run get registered; re-run once C1 exists.
+
+- name: Create Argo CD credentials on spoke clusters
+  hosts: control_plane:!c3
+  become: true
+  roles:
+    - argocd_spoke
+
+- name: Install Argo CD on the hub and hand over to Git
+  hosts: control_plane:&c3
+  become: true
+  roles:
+    - argocd_hub

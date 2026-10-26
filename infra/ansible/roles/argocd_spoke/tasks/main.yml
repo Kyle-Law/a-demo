@@ -1,0 +1,36 @@
+- name: Create the argocd-manager ServiceAccount, binding and token
+  ansible.builtin.command: kubectl --context {{ kube_context }} apply -f -
+  args:
+    stdin: "{{ lookup('ansible.builtin.file', 'argocd-manager.yaml') }}"
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: argocd_spoke_apply
+  changed_when: "' created' in argocd_spoke_apply.stdout or ' configured' in argocd_spoke_apply.stdout"
+
+- name: Wait for the token controller to fill in the token
+  ansible.builtin.command: >-
+    kubectl --context {{ kube_context }} -n kube-system
+    get secret argocd-manager-token -o jsonpath={.data.token}
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: argocd_spoke_token
+  until: argocd_spoke_token.stdout | length > 0
+  retries: 10
+  delay: 3
+  changed_when: false
+  no_log: true
+
+- name: Read the cluster CA
+  ansible.builtin.command: >-
+    kubectl --context {{ kube_context }} config view --raw --minify
+    -o jsonpath={.clusters[0].cluster.certificate-authority-data}
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: argocd_spoke_ca
+  changed_when: false
+
+- name: Hand token and CA to the hub play
+  ansible.builtin.set_fact:
+    argocd_manager_token: "{{ argocd_spoke_token.stdout | b64decode }}"
+    argocd_manager_ca: "{{ argocd_spoke_ca.stdout }}"
+  no_log: true

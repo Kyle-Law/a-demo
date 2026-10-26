@@ -1,0 +1,59 @@
+- name: Copy Argo CD values and the root ApplicationSet
+  ansible.builtin.copy:
+    src: "{{ repo_root }}/{{ item }}"
+    dest: /etc/a-demo/argocd/
+    mode: "0644"
+  loop:
+    - platform/argocd/values.yaml
+    - clusters/c3/roots.yaml
+
+- name: Check for an existing Argo CD release
+  ansible.builtin.command: helm status argocd --namespace argocd --kube-context {{ kube_context }}
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: argocd_hub_release
+  changed_when: false
+  failed_when: false
+
+# Install only. Afterwards Argo CD upgrades itself from clusters/c3/argocd.yaml.
+- name: Install Argo CD (chart {{ argocd_chart_version }})
+  ansible.builtin.command: >-
+    helm install argocd argo-cd
+    --repo https://argoproj.github.io/argo-helm
+    --version {{ argocd_chart_version }}
+    --namespace argocd --create-namespace
+    --kube-context {{ kube_context }}
+    --values /etc/a-demo/argocd/values.yaml
+    --wait --timeout 10m
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  when: argocd_hub_release.rc != 0
+  changed_when: true
+
+# Credentials go straight into the hub cluster; they are never written to Git or to disk.
+- name: Register spoke clusters with Argo CD
+  ansible.builtin.command: kubectl --context {{ kube_context }} apply -f -
+  args:
+    stdin: "{{ lookup('ansible.builtin.template', 'cluster-secret.yaml.j2') }}"
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  loop: "{{ groups['control_plane'] | difference(groups['c3']) }}"
+  when: hostvars[item].argocd_manager_token is defined
+  register: argocd_hub_register
+  changed_when: "' created' in argocd_hub_register.stdout or ' configured' in argocd_hub_register.stdout"
+  no_log: true
+
+- name: Check for the root ApplicationSet
+  ansible.builtin.command: kubectl --context {{ kube_context }} -n argocd get applicationset roots
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: argocd_hub_roots
+  changed_when: false
+  failed_when: false
+
+- name: Create the root ApplicationSet (Git takes over from here)
+  ansible.builtin.command: kubectl --context {{ kube_context }} create -f /etc/a-demo/argocd/roots.yaml
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  when: argocd_hub_roots.rc != 0
+  changed_when: true

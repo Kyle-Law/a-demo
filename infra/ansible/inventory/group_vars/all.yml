@@ -7,6 +7,9 @@ containerd_version: "2.4.2" # default sandbox image pause:3.10.2 matches kubeadm
 helm_version: v3.22.1
 cilium_version: "1.20.4"
 cilium_cli_version: v0.20.1
+argocd_chart_version: "10.11.6" # Argo CD v3.5.6; keep equal to clusters/c3/argocd.yaml
+
+repo_root: "{{ playbook_dir }}/../.."
 
 cluster_names: [c1, c2, c3]
 control_plane_host: "{{ groups[cluster_name] | intersect(groups['control_plane']) | first }}"
