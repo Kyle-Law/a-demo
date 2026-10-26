@@ -1,0 +1,57 @@
+# Public interfaces only accept SSH, WireGuard and (control planes) the API server from admin_cidrs.
+# Everything between nodes, including Cluster Mesh, rides wg0.
+
+- name: Install ufw
+  ansible.builtin.apt:
+    name: ufw
+
+- name: Allow SSH before enabling the firewall
+  community.general.ufw:
+    rule: allow
+    port: "{{ item | string }}"
+    proto: tcp
+  loop: "{{ firewall_ssh_ports }}"
+
+- name: Allow WireGuard from anywhere (peers authenticate by key)
+  community.general.ufw:
+    rule: allow
+    port: "{{ wireguard_port | string }}"
+    proto: udp
+
+- name: Allow all traffic arriving over the mesh
+  community.general.ufw:
+    rule: allow
+    direction: in
+    interface: wg0
+
+- name: Allow pod-to-host traffic from every cluster's pod CIDR
+  community.general.ufw:
+    rule: allow
+    from_ip: "{{ item }}"
+  loop: >-
+    {{ query('ansible.builtin.file', *values_files)
+       | map('from_yaml')
+       | map(attribute='ipam.operator.clusterPoolIPv4PodCIDRList')
+       | flatten }}
+  vars:
+    values_files: "{{ cluster_names | map('regex_replace', '^(.*)$', cilium_values_dir ~ '/values-\\1.yaml') }}"
+
+- name: Allow the API server from admin CIDRs
+  community.general.ufw:
+    rule: allow
+    port: "6443"
+    proto: tcp
+    from_ip: "{{ item }}"
+  loop: "{{ admin_cidrs }}"
+  when: inventory_hostname in groups['control_plane']
+
+- name: Forward routed traffic (Cilium owns pod forwarding)
+  community.general.ufw:
+    default: allow
+    direction: routed
+
+- name: Deny other inbound traffic and enable the firewall
+  community.general.ufw:
+    state: enabled
+    default: deny
+    direction: incoming

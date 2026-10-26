@@ -1,5 +1,19 @@
+cluster_names: [c1, c2, c3]
+
+# Host-level WireGuard mesh spanning every node of every cluster, across providers.
+# Each host's wg_ip (inventory) is its Kubernetes node IP.
+wireguard_port: 51820
+wireguard_network: 172.30.0.0/16
+wireguard_mtu: 1420 # keep equal to MTU in platform/cilium/values.yaml
+
+# Cilium Helm values; also the source of truth for pod CIDRs (firewall reads them).
+cilium_values_dir: "{{ playbook_dir }}/../../platform/cilium"
+
 # Source CIDRs allowed to reach kube-apiserver on control-plane public IPs.
 admin_cidrs: [] # TODO: your egress IP(s), e.g. ["198.51.100.7/32"]
+
+# Ports sshd listens on (on the host, not a provider-side NAT port).
+firewall_ssh_ports: [22]
 
 # Kernel or driver upgrades in the middle of a demo break GPU nodes.
 disable_unattended_upgrades: true

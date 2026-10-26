@@ -1,1 +1,2 @@
 cluster_name: c1
+service_cidr: 10.101.0.0/16 # pod CIDR and cluster ID: platform/cilium/values-c1.yaml

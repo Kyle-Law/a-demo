@@ -1,0 +1,5 @@
+# wg-quick reload applies peer changes with wg syncconf, without dropping existing tunnels.
+- name: Reload wg0
+  ansible.builtin.systemd_service:
+    name: wg-quick@wg0
+    state: reloaded

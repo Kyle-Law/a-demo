@@ -1,0 +1,26 @@
+# Cilium values shared by all clusters; per-cluster overrides in values-<cluster>.yaml.
+# Chart 1.20.4 (cilium_version in infra/ansible/inventory/group_vars/all.yml).
+# Installed once by infra/ansible during B0 bootstrap; Argo CD owns the release from B1.
+
+kubeProxyReplacement: true
+
+# Nodes span providers and talk over the host WireGuard mesh (wg0), so routing is
+# VXLAN over wg0. Cilium's own encryption stays off: wg0 already encrypts node-to-node.
+routingMode: tunnel
+tunnelProtocol: vxlan
+
+# Underlay MTU = wg0 MTU (wireguard_mtu); Cilium subtracts VXLAN overhead itself.
+MTU: 1420
+
+ipam:
+  mode: cluster-pool
+  operator:
+    clusterPoolIPv4MaskSize: 24
+
+operator:
+  replicas: 1 # one control-plane node per cluster
+
+hubble:
+  enabled: true
+  relay:
+    enabled: false # B5

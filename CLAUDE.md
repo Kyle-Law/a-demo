@@ -22,7 +22,7 @@ Priority order when trading off effort: ops agent loop > Slurm depth > GPU stack
 | C2 | `c2` | CPU + A6000 48GB | Inference replica + Slinky training |
 | C3 | `c3` | 3 CPU nodes | Ops control plane: agent, executor, Argo CD, observability |
 
-Hosts are provisioned by hand (MI300X: HotAisle; CPU/A100/A6000: Prime Intellect) and reached over SSH on public IPs.
+Hosts are provisioned by hand (MI300X: HotAisle; CPU/A100/A6000: Prime Intellect) and reached over SSH on public IPs. Addressing plan: `infra/ansible/README.md`.
 
 ### C1 accelerator layout
 
@@ -47,6 +47,7 @@ Hosts are provisioned by hand (MI300X: HotAisle; CPU/A100/A6000: Prime Intellect
 6. **Agent never holds standing write credentials.** Read-only ServiceAccounts for triage; the executor obtains short-lived, runbook-scoped tokens (Vault Kubernetes secrets engine).
 7. **Agent-authored runbooks are never executable until a human merges the PR.**
 8. **Runbooks live in a separate repo** so the agent's GitHub token is scoped to that repo only.
+9. **Host WireGuard mesh under everything.** All nodes of all clusters share `wg0` (`172.30.0.0/16`); the wg IP is the node IP. Cilium uses VXLAN over `wg0` with Cilium encryption off. Needed because C1 spans two providers and public IPs may be NATed. Pod CIDRs (`10.{1,2,3}.0.0/16`) and Cilium cluster IDs (1–3) must stay unique for Cluster Mesh.
 
 ## Repository layout
 

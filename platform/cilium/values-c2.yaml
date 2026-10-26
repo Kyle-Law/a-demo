@@ -1,0 +1,11 @@
+# Cluster Mesh needs a unique name/ID and a non-overlapping pod CIDR per cluster.
+cluster:
+  name: c2
+  id: 2
+
+k8sServiceHost: 172.30.2.10 # c2-cp wg_ip
+k8sServicePort: 6443
+
+ipam:
+  operator:
+    clusterPoolIPv4PodCIDRList: ["10.2.0.0/16"]

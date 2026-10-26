@@ -1,0 +1,15 @@
+# Managed by Ansible (infra/ansible/roles/wireguard). Do not edit by hand.
+[Interface]
+Address = {{ wg_ip }}/{{ wireguard_network.split('/')[1] }}
+ListenPort = {{ wireguard_port }}
+MTU = {{ wireguard_mtu }}
+PrivateKey = {{ wireguard_private_key.content | b64decode | trim }}
+{% for peer in ansible_play_hosts | sort if peer != inventory_hostname and hostvars[peer].wg_pubkey is defined %}
+
+[Peer]
+# {{ peer }}
+PublicKey = {{ hostvars[peer].wg_pubkey }}
+Endpoint = {{ hostvars[peer].wg_endpoint | default(hostvars[peer].ansible_host) }}:{{ wireguard_port }}
+AllowedIPs = {{ hostvars[peer].wg_ip }}/32
+PersistentKeepalive = 25
+{% endfor %}
