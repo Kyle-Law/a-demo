@@ -4,6 +4,7 @@
     dest: /etc/apt/keyrings/docker.asc
     mode: "0644"
 
+# common removes any provider-shipped Docker source first, so this is the only entry.
 - name: Add Docker apt repository
   ansible.builtin.deb822_repository:
     name: docker

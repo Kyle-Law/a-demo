@@ -71,7 +71,7 @@ Track status here. Each block must meet its "done when" before it's marked done.
 
 | ID | Block | Depends on | Done when | Status |
 |---|---|---|---|---|
-| B0 | Provisioning (Ansible, kubeadm, Cilium) | — | `cilium status` green on all 3 clusters | in progress (playbook written; not yet run) |
+| B0 | Provisioning (Ansible, kubeadm, Cilium) | — | `cilium status` green on all 3 clusters | in progress (C2 verified 2026-10-27; C1, C3 pending) |
 | B1 | GitOps hub (Argo CD on C3) | B0 | Git change lands on all 3 clusters | in progress (manifests written; not yet run) |
 | B2 | Observability baseline | B1 | One dashboard shows all clusters' nodes | todo |
 | B3 | NVIDIA stack (GPU Operator, MIG, DCGM) | B1 | C1 advertises 3x mig-2g.20gb + 1x mig-1g.20gb; test pod on each | todo |
