@@ -23,3 +23,9 @@
   become: true
   roles:
     - worker
+
+- name: Install Cilium and verify
+  hosts: control_plane
+  become: true
+  roles:
+    - cilium
