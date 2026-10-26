@@ -45,6 +45,25 @@
       Ubuntu's containerd/docker.io packages conflict with containerd.io. Remove them by hand
       (check nothing on the host depends on them first), then re-run.
 
+# Some provider images (Massed Compute, Verda) ship their own docker.list with a different keyring.
+# The containerd role adds Docker's repo as docker.sources; two Signed-By values for one repo make
+# apt refuse to read any sources, so remove every other Docker entry before the first apt call.
+- name: Find provider-shipped apt sources for Docker's repository
+  ansible.builtin.find:
+    paths: /etc/apt/sources.list.d
+    patterns: ["*.list", "*.sources"]
+    excludes: docker.sources
+    contains: .*download\.docker\.com.*
+  register: common_other_docker_sources
+
+- name: Remove them
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ common_other_docker_sources.files }}"
+  loop_control:
+    label: "{{ item.path }}"
+
 - name: Install base packages
   ansible.builtin.apt:
     name: [ca-certificates, curl, gpg, jq, chrony, conntrack, socat]
