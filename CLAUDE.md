@@ -53,7 +53,7 @@ Hosts are provisioned by hand (MI300X: HotAisle; CPU/A100/A6000: Prime Intellect
 
 ```
 infra/        ansible (OS tuning, WireGuard mesh, kubeadm + cilium bootstrap); no terraform for compute
-clusters/     c1/, c2/, c3/ — Argo CD app-of-apps per cluster
+clusters/     Argo CD app-of-apps: all/ (every cluster), c1/ c2/ (one cluster), c3/ (hub); see clusters/README.md
 platform/     cilium, gpu-operator, amd-gpu, observability, egress
 inference/    models/, gateways/, pools/
 tenancy/      namespaces, rbac, quotas, kueue, kyverno
@@ -72,7 +72,7 @@ Track status here. Each block must meet its "done when" before it's marked done.
 | ID | Block | Depends on | Done when | Status |
 |---|---|---|---|---|
 | B0 | Provisioning (Ansible, kubeadm, Cilium) | — | `cilium status` green on all 3 clusters | in progress (playbook written; not yet run) |
-| B1 | GitOps hub (Argo CD on C3) | B0 | Git change lands on all 3 clusters | todo |
+| B1 | GitOps hub (Argo CD on C3) | B0 | Git change lands on all 3 clusters | in progress (manifests written; not yet run) |
 | B2 | Observability baseline | B1 | One dashboard shows all clusters' nodes | todo |
 | B3 | NVIDIA stack (GPU Operator, MIG, DCGM) | B1 | C1 advertises 3x mig-2g.20gb + 1x mig-1g.20gb; test pod on each | todo |
 | B4 | AMD stack (AMD GPU Operator, exporter) | B1 | `amd.com/gpu` allocatable; ROCm smoke pod runs | todo |
@@ -124,6 +124,8 @@ Build order: vertical slice on C2 first (B0, B3, B7, B8, B2, B13, B14), then C1 
 export KUBECONFIG=~/.kube/a-demo/c1.yaml:~/.kube/a-demo/c2.yaml:~/.kube/a-demo/c3.yaml
 (cd infra/ansible && ansible-playbook site.yml --limit c2)   # B0; mutates hosts — ask first
 cilium --context c2 status --wait
+(cd infra/ansible && ansible-playbook gitops.yml)            # B1; mutates clusters — ask first
+kubectl --context c3 -n argocd get applications
 kubectl --context c1 get nodes -o custom-columns=NAME:.metadata.name,GPU:.status.allocatable
 cilium --context c1 clustermesh status
 hubble observe --since 5m

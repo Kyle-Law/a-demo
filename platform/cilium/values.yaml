@@ -20,7 +20,19 @@ ipam:
 operator:
   replicas: 1 # one control-plane node per cluster
 
+# Certs come from an in-cluster CronJob, not from Helm at render time. The default "helm"
+# method generates new certs on every render, so Argo CD would show Cilium permanently
+# OutOfSync and rotate the certs on every self-heal.
 hubble:
   enabled: true
   relay:
     enabled: false # B5
+  tls:
+    auto:
+      method: cronJob
+
+clustermesh:
+  apiserver:
+    tls:
+      auto:
+        method: cronJob

@@ -1,0 +1,30 @@
+# B1 "done when": edit platform/canary/canary.yaml, push, and the change shows up on every cluster.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: canary
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - clusters:
+        selector:
+          matchLabels:
+            a-demo.io/fleet: "true"
+  template:
+    metadata:
+      name: "canary-{{ .name }}"
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/Kyle-Law/a-demo.git
+        targetRevision: main
+        path: platform/canary
+      destination:
+        name: "{{ .name }}"
+        namespace: a-demo-canary
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true

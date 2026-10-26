@@ -1,0 +1,38 @@
+# Cilium on every fleet cluster. Adopts the release infra/ansible installed in B0.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: cilium
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - clusters:
+        selector:
+          matchLabels:
+            a-demo.io/fleet: "true"
+  template:
+    metadata:
+      name: "cilium-{{ .name }}"
+    spec:
+      project: default
+      sources:
+        - repoURL: https://helm.cilium.io
+          chart: cilium
+          targetRevision: 1.20.4 # keep equal to cilium_version in infra/ansible
+          helm:
+            releaseName: cilium
+            valueFiles:
+              - $values/platform/cilium/values.yaml
+              - $values/platform/cilium/values-{{ .name }}.yaml
+        - repoURL: https://github.com/Kyle-Law/a-demo.git
+          targetRevision: main
+          ref: values
+      destination:
+        name: "{{ .name }}"
+        namespace: kube-system
+      syncPolicy:
+        automated:
+          prune: false # a bad prune here takes the cluster's network down
+          selfHeal: true
