@@ -44,3 +44,7 @@ ansible-playbook site.yml --limit c2
 # 3. Later, once more clusters exist, run without --limit so every node's wg0 lists every peer:
 ansible-playbook site.yml
 ```
+
+## Replacing a host
+
+On-demand hosts come back with new public IPs. Update `ansible_host` and keep the same `wg_ip`. If it's a worker, delete the old node first (`kubectl --context <c> delete node <name>`, after asking). Then re-run the playbook without `--limit` so every peer learns the new endpoint. If it's a control plane, the cluster has to be rebuilt.

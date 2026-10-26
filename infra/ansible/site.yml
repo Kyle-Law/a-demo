@@ -11,3 +11,15 @@
     - firewall
     - containerd
     - kubernetes
+
+- name: Initialize control planes
+  hosts: control_plane
+  become: true
+  roles:
+    - control_plane
+
+- name: Join workers
+  hosts: workers
+  become: true
+  roles:
+    - worker

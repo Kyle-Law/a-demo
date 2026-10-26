@@ -6,6 +6,7 @@ kubernetes_package_version: "1.36.5-1.1"
 containerd_version: "2.4.2" # default sandbox image pause:3.10.2 matches kubeadm 1.36
 
 cluster_names: [c1, c2, c3]
+control_plane_host: "{{ groups[cluster_name] | intersect(groups['control_plane']) | first }}"
 
 # Host-level WireGuard mesh spanning every node of every cluster, across providers.
 # Each host's wg_ip (inventory) is its Kubernetes node IP.
@@ -24,3 +25,6 @@ firewall_ssh_ports: [22]
 
 # Kernel or driver upgrades in the middle of a demo break GPU nodes.
 disable_unattended_upgrades: true
+
+# Admin kubeconfigs are written here on the controller, outside the repo.
+kubeconfig_dir: "{{ lookup('env', 'HOME') }}/.kube/a-demo"
