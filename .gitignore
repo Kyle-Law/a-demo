@@ -1,0 +1,9 @@
+.DS_Store
+*.retry
+.venv/
+__pycache__/
+*.kubeconfig
+kubeconfig*.yaml
+.terraform/
+*.tfstate
+*.tfstate.*
