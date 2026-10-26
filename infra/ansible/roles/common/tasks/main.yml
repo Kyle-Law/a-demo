@@ -1,7 +1,7 @@
 - name: Require admin_cidrs so the API server is not left open to the internet
   ansible.builtin.assert:
-    that: admin_cidrs | length > 0
-    fail_msg: Set admin_cidrs in inventory/group_vars/all.yml to the IP(s) you run kubectl from.
+    that: admin_cidrs | default([]) | length > 0
+    fail_msg: Set admin_cidrs in inventory/local.yml to the IP(s) you run kubectl from (see README).
   run_once: true
 
 - name: Require a supported OS

@@ -1,5 +1,6 @@
 .DS_Store
 *.retry
+infra/ansible/inventory/local.yml
 .venv/
 __pycache__/
 *.kubeconfig
