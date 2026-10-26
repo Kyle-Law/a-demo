@@ -1,7 +1,11 @@
 # B0: OS prep, WireGuard mesh, containerd, kubeadm, Cilium.
+# First bring-up of a single cluster: ansible-playbook site.yml --limit c2
+# Once more than one cluster exists, run without --limit so every node's mesh config lists every peer.
 
 - name: Prepare hosts
   hosts: all
   become: true
   roles:
     - common
+    - wireguard
+    - firewall

@@ -1,0 +1,54 @@
+- name: Warn when the mesh is built from a partial host list
+  ansible.builtin.debug:
+    msg: >-
+      Only {{ ansible_play_hosts | length }} of {{ groups['all'] | length }} hosts are in this play.
+      wg0 peers are computed from play hosts; fine for a single-cluster bring-up, otherwise re-run without --limit.
+  when: ansible_play_hosts | length < groups['all'] | length
+  run_once: true
+
+- name: Install WireGuard tools
+  ansible.builtin.apt:
+    name: wireguard-tools
+
+- name: Create /etc/wireguard
+  ansible.builtin.file:
+    path: /etc/wireguard
+    state: directory
+    mode: "0700"
+
+- name: Generate the node's private key once
+  ansible.builtin.shell: umask 077 && wg genkey > /etc/wireguard/wg0.key
+  args:
+    creates: /etc/wireguard/wg0.key
+
+- name: Derive the node's public key
+  ansible.builtin.shell: wg pubkey < /etc/wireguard/wg0.key
+  register: wireguard_pubkey_cmd
+  changed_when: false
+
+- name: Read the node's private key
+  ansible.builtin.slurp:
+    src: /etc/wireguard/wg0.key
+  register: wireguard_private_key
+  no_log: true
+
+- name: Publish the public key to other hosts
+  ansible.builtin.set_fact:
+    wg_pubkey: "{{ wireguard_pubkey_cmd.stdout }}"
+
+- name: Render wg0.conf with every other play host as a peer
+  ansible.builtin.template:
+    src: wg0.conf.j2
+    dest: /etc/wireguard/wg0.conf
+    mode: "0600"
+  no_log: true
+  notify: Reload wg0
+
+- name: Start wg0
+  ansible.builtin.systemd_service:
+    name: wg-quick@wg0
+    enabled: true
+    state: started
+
+- name: Apply peer changes before anything depends on the mesh
+  ansible.builtin.meta: flush_handlers
