@@ -38,7 +38,16 @@ Check these when renting a machine. The playbook asserts the first three.
 cd infra/ansible
 ansible-galaxy collection install -r requirements.yml
 
-# 1. Fill in inventory/hosts.yml (public IPs, ansible_user) and admin_cidrs in group_vars/all.yml.
+# 1. Probe each new host (read-only): ssh <user>@<ip> 'bash -s' < ../host-probe.sh
+#    Then write inventory/local.yml (git-ignored; real IPs stay out of this public repo):
+#
+#      all:
+#        hosts:
+#          c2-cp:    { ansible_host: 203.0.113.21, ansible_user: root }
+#          c2-a6000: { ansible_host: 203.0.113.22, ansible_user: ubuntu }
+#        vars:
+#          admin_cidrs: ["198.51.100.7/32"]   # where you run kubectl from
+#
 # 2. First cluster (vertical slice):
 ansible-playbook site.yml --limit c2
 # 3. Later, once more clusters exist, run without --limit so every node's wg0 lists every peer:
