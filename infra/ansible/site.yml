@@ -11,6 +11,8 @@
     - firewall
     - containerd
     - kubernetes
+    - role: nvidia_mig # reboots the host the first time
+      when: mig_enabled | default(false)
 
 - name: Initialize control planes
   hosts: control_plane

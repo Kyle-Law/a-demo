@@ -32,6 +32,10 @@ Check these when renting a machine. The playbook asserts the first three.
 - Root or passwordless sudo over SSH.
 - Provider private networks must not overlap `10.1-3.0.0/16`, `10.101-103.0.0/16` or `172.30.0.0/16`. Check with `ip route` on a fresh host.
 
+## MIG hosts
+
+Hosts with `mig_enabled: true` (c1-a100) get MIG mode turned on by `roles/nvidia_mig`, which **reboots the host** the first time. MIG mode only takes effect after a GPU reset, and on these VMs the reset always fails ("In use by another client"). GPU Operator's own `WITH_REBOOT` path doesn't work here either: it stops kubelet and never reboots. The slice layout itself is set by GPU Operator's mig-manager (`platform/gpu-operator/`), which needs no reset once MIG mode is on.
+
 ## Run
 
 ```bash

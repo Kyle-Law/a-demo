@@ -30,6 +30,11 @@ Hosts are provisioned by hand (MI300X: HotAisle; CPU/A100/A6000: Prime Intellect
   - 2x `2g.20gb`: model A replicas (same model, two pods; never tensor-parallel across MIG slices — not possible)
   - 1x `2g.20gb`: model B
   - 1x `1g.20gb`: embedding + reranker (agent retrieval over runbooks/tickets)
+- Measured 2026-10-27 (Massed Compute A100 80GB PCIe, driver 580): each slice has **19.5 GiB** usable,
+  not 20. BF16 GEMM: 2g.20gb ≈ 77 TFLOPS alone, ≈ 61 with all four slices busy (the 300 W board
+  power is shared, so MIG isolates memory and SMs but not throughput); 1g.20gb ≈ 33.
+- MIG *mode* is turned on by Ansible (`mig_enabled`, `roles/nvidia_mig`, reboots once); the slice
+  layout is GPU Operator mig-manager config (`platform/gpu-operator/`), selected per GPU model.
 - MI300X 192GB: large FP8 MoE (target: INTELLECT-3-FP8), also the agent's primary LLM. The agent must keep an external fallback LLM — it must not depend solely on infrastructure it heals.
 
 ### C2
@@ -74,7 +79,7 @@ Track status here. Each block must meet its "done when" before it's marked done.
 | B0 | Provisioning (Ansible, kubeadm, Cilium) | — | `cilium status` green on all 3 clusters | in progress (C2 verified 2026-10-27; C1, C3 pending) |
 | B1 | GitOps hub (Argo CD on C3) | B0 | Git change lands on all 3 clusters | in progress (manifests written; not yet run) |
 | B2 | Observability baseline | B1 | One dashboard shows all clusters' nodes | todo |
-| B3 | NVIDIA stack (GPU Operator, MIG, DCGM) | B1 | C1 advertises 3x mig-2g.20gb + 1x mig-1g.20gb; test pod on each | todo |
+| B3 | NVIDIA stack (GPU Operator, MIG, DCGM) | B1 | C1 advertises 3x mig-2g.20gb + 1x mig-1g.20gb; test pod on each | in progress (A100 + A6000 verified 2026-10-27 with the A100 joined to C2 for the test; rerun on C1 via Argo CD) |
 | B4 | AMD stack (AMD GPU Operator, exporter) | B1 | `amd.com/gpu` allocatable; ROCm smoke pod runs | todo |
 | B5 | Cluster Mesh + Hubble Relay | B0 | Echo global service fails over C1→C2, visible in Hubble | todo |
 | B6 | Egress gateways + default-deny + FQDN allowlist | B5 | Agent ns reaches only Jira/GitHub/LLM API | todo |

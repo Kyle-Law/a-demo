@@ -1,0 +1,32 @@
+# B3: NVIDIA GPU Operator on C1 (A100, MIG layout a-demo-c1).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: gpu-operator-c1
+  namespace: argocd
+spec:
+  project: default
+  sources:
+    - repoURL: https://helm.ngc.nvidia.com/nvidia
+      chart: gpu-operator
+      targetRevision: v26.7.2 # keep equal to clusters/c2/gpu-operator.yaml
+      helm:
+        releaseName: gpu-operator
+        valueFiles:
+          - $values/platform/gpu-operator/values.yaml
+    - repoURL: https://github.com/Kyle-Law/a-demo.git
+      targetRevision: main
+      ref: values
+    - repoURL: https://github.com/Kyle-Law/a-demo.git
+      targetRevision: main
+      path: platform/gpu-operator/manifests # MIG layout selection (NodeFeatureRule)
+  destination:
+    name: c1
+    namespace: gpu-operator
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true # NFD and ClusterPolicy CRDs exceed client-side apply's annotation size limit
