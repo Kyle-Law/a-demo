@@ -1,0 +1,9 @@
+# Argo CD on C3, the GitOps hub. Chart argo-cd 10.11.6 (Argo CD v3.5.6), pinned in
+# clusters/c3/argocd.yaml and argocd_chart_version in infra/ansible/inventory/group_vars/all.yml.
+# Installed once by infra/ansible/gitops.yml; from then on Argo CD manages itself.
+
+dex:
+  enabled: false # local admin only; UI via kubectl port-forward
+
+notifications:
+  enabled: false

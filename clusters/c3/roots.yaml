@@ -1,0 +1,33 @@
+# GitOps entry point. infra/ansible/gitops.yml applies this once; after that it manages itself
+# through c3-root. Each clusters/<dir>/ becomes an Application "<dir>-root" that applies the
+# Argo CD objects in that directory to the hub.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: roots
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - git:
+        repoURL: https://github.com/Kyle-Law/a-demo.git
+        revision: main
+        directories:
+          - path: clusters/*
+  template:
+    metadata:
+      name: "{{ .path.basename }}-root"
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/Kyle-Law/a-demo.git
+        targetRevision: main
+        path: "{{ .path.path }}"
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: argocd
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true

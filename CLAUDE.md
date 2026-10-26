@@ -101,7 +101,7 @@ Build order: vertical slice on C2 first (B0, B3, B7, B8, B2, B13, B14), then C1 
 
 ## Conventions
 
-- All cluster state goes through Git and Argo CD. No hand-applied manifests, except during B0 bootstrap.
+- All cluster state goes through Git and Argo CD. No hand-applied manifests, except bootstrap done by `infra/ansible`: B0 (hosts, Cilium) and B1 (Argo CD install, spoke credentials, root ApplicationSet).
 - Pin every Helm chart and image version; no `latest`.
 - Secrets: never commit. Use TODO (SOPS / External Secrets) — confirm before adding anything secret-shaped.
 - Python for the agent and tooling (TODO: confirm version, package manager); Bash for chaos scripts with `set -euo pipefail`.

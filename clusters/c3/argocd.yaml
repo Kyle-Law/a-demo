@@ -1,0 +1,28 @@
+# Argo CD manages its own Helm release.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: argocd
+  namespace: argocd
+spec:
+  project: default
+  sources:
+    - repoURL: https://argoproj.github.io/argo-helm
+      chart: argo-cd
+      targetRevision: 10.11.6 # keep equal to argocd_chart_version in infra/ansible
+      helm:
+        releaseName: argocd
+        valueFiles:
+          - $values/platform/argocd/values.yaml
+    - repoURL: https://github.com/Kyle-Law/a-demo.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: false # never let a bad commit delete the thing that would roll it back
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true # Argo CD's CRDs exceed client-side apply's annotation size limit

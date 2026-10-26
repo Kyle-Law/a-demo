@@ -1,0 +1,15 @@
+# Registers the hub's own cluster under the name "c3" so ApplicationSets can target it like
+# any other cluster. No credentials: Argo CD reaches its own cluster with its ServiceAccount.
+# C1/C2 cluster Secrets hold tokens and are created by infra/ansible/gitops.yml, never committed.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: cluster-c3
+  namespace: argocd
+  labels:
+    argocd.argoproj.io/secret-type: cluster
+    a-demo.io/fleet: "true"
+stringData:
+  name: c3
+  server: https://kubernetes.default.svc
+  config: '{"tlsClientConfig":{"insecure":false}}'

@@ -61,3 +61,19 @@ kubectl --context c2 get nodes -o wide   # INTERNAL-IP should be the 172.30.x.x 
 ## Replacing a host
 
 On-demand hosts come back with new public IPs. Update `ansible_host` and keep the same `wg_ip`. If it's a worker, delete the old node first (`kubectl --context <c> delete node <name>`, after asking). Then re-run the playbook without `--limit` so every peer learns the new endpoint. If it's a control plane, the cluster has to be rebuilt.
+
+## B1: Argo CD hub (`gitops.yml`)
+
+Run after `site.yml`, once C3 and at least one GPU cluster exist:
+
+```bash
+ansible-playbook gitops.yml          # or --limit c2,c3 while C1 doesn't exist yet
+```
+
+1. On C1/C2: creates `kube-system/argocd-manager` (cluster-admin) and a token for it.
+2. On C3: installs Argo CD (install-only; afterwards it manages itself from `clusters/c3/argocd.yaml`).
+3. Writes one Argo CD cluster Secret per spoke (`c1`, `c2`, server = the spoke's wg IP) straight into C3. Tokens never touch Git or disk.
+4. Creates the `roots` ApplicationSet (`clusters/c3/roots.yaml`). From here on, everything comes from Git.
+
+UI: `kubectl --context c3 -n argocd port-forward svc/argocd-server 8080:443`, user `admin`, password from
+`kubectl --context c3 -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d`.
