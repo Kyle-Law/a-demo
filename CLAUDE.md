@@ -18,9 +18,11 @@ Priority order when trading off effort: ops agent loop > Slurm depth > GPU stack
 
 | Cluster | kube context | Hardware | Role |
 |---|---|---|---|
-| C1 | `c1` (TODO: confirm) | CPU + A100 80GB (MIG) + MI300X | Multi-tenant inference |
-| C2 | `c2` (TODO: confirm) | CPU + A6000 48GB | Inference replica + Slinky training |
-| C3 | `c3` (TODO: confirm) | 3 CPU nodes | Ops control plane: agent, executor, Argo CD, observability |
+| C1 | `c1` | CPU + A100 80GB (MIG) + MI300X | Multi-tenant inference |
+| C2 | `c2` | CPU + A6000 48GB | Inference replica + Slinky training |
+| C3 | `c3` | 3 CPU nodes | Ops control plane: agent, executor, Argo CD, observability |
+
+Hosts are provisioned by hand (MI300X: HotAisle; CPU/A100/A6000: Prime Intellect) and reached over SSH on public IPs.
 
 ### C1 accelerator layout
 
@@ -49,7 +51,7 @@ Priority order when trading off effort: ops agent loop > Slurm depth > GPU stack
 ## Repository layout
 
 ```
-infra/        terraform, ansible (provisioning, OS tuning, k8s + cilium bootstrap)
+infra/        ansible (OS tuning, WireGuard mesh, kubeadm + cilium bootstrap); no terraform for compute
 clusters/     c1/, c2/, c3/ — Argo CD app-of-apps per cluster
 platform/     cilium, gpu-operator, amd-gpu, observability, egress
 inference/    models/, gateways/, pools/

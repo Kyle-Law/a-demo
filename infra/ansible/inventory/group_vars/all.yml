@@ -1,0 +1,5 @@
+# Source CIDRs allowed to reach kube-apiserver on control-plane public IPs.
+admin_cidrs: [] # TODO: your egress IP(s), e.g. ["198.51.100.7/32"]
+
+# Kernel or driver upgrades in the middle of a demo break GPU nodes.
+disable_unattended_upgrades: true
