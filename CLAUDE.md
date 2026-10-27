@@ -40,7 +40,7 @@ Hosts are provisioned by hand (MI300X: HotAisle; CPU/A100/A6000: Prime Intellect
 - MIG mode *and* the slices are set by Ansible (`mig_layout`, `roles/nvidia_mig`; reboots once). GPU
   Operator's DRA mode has no mig-manager, and the DRA driver only discovers slices that exist when
   it starts, so a boot-time unit recreates them before kubelet. MIG mode on with no slices strands the GPU.
-- MI300X 192GB: large FP8 MoE (target: INTELLECT-3-FP8), also the agent's primary LLM. The agent must keep an external fallback LLM — it must not depend solely on infrastructure it heals.
+- MI300X 192GB: large FP8 MoE (target: INTELLECT-3-FP8), also the agent's primary LLM. The agent must keep an external fallback LLM — it must not depend solely on infrastructure it heals. Chain (`agent/ops-agent`, `AGENT_LLM_CHAIN`): intellect-3 (MI300X) → model-a (A100 MIG / A6000) → Claude via the Anthropic API.
 
 ### C2
 
@@ -96,7 +96,7 @@ Track status here. Each block must meet its "done when" before it's marked done.
 | B11 | Slinky (operator, slurmdbd, GRES, Pyxis/Enroot, DCGM prolog) | B3 | Containerized GPU job runs; failed diag drains node | todo |
 | B12 | Train-to-serve loop (LoRA → MinIO → dynamic adapter) | B9, B11 | One command: sbatch → new adapter answering | todo |
 | B13 | Incident intake (Alertmanager → Jira) + chaos scripts | B2 | Each fault yields exactly one ticket | in progress (bridge, routing, 4 ticket rules + chaos scripts written; not yet run) |
-| B14 | Read-only agent (triage + RCA) | B13 | Correct RCA with evidence on every scripted fault | todo |
+| B14 | Read-only agent (triage + RCA) | B13 | Correct RCA with evidence on every scripted fault | in progress (agent core + tests written; deployment on C3 next; not yet run) |
 | B15 | Runbook repo + executor (Vault short-lived tokens, approval gate) | B14 | Merged runbook fixes a fault; ticket auto-closes | todo |
 | B16 | Runbook authoring (agent opens PRs) | B15 | Agent PR passes CI; executable after merge | todo |
 

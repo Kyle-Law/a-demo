@@ -1,0 +1,9 @@
+[project]
+name = "ops-agent"
+version = "0.1.0"
+description = "Read-only ops agent (B14): triage and root-cause analysis for alert tickets"
+requires-python = ">=3.12"
+dependencies = ["anthropic==2.3.0", "openai==3.39.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
