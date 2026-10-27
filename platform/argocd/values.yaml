@@ -7,3 +7,10 @@ dex:
 
 notifications:
   enabled: false
+
+configs:
+  params:
+    # Diff against a server-side apply dry run, so fields the API server fills in (for example
+    # allocationMode/count in ResourceClaimTemplates, defaults in Prometheus CRs) aren't drift.
+    # Without it those apps stay OutOfSync forever (first bring-up, 2026-10-27).
+    controller.diff.server.side: "true"

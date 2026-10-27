@@ -1,5 +1,6 @@
 # Loki 7.5.0 (app 3.6.16) on C3, single binary with filesystem storage: logs from every cluster
-# are pushed here by Grafana Alloy (B2 part 2). Same emptyDir caveat as Prometheus (values-hub.yaml).
+# are pushed here by Grafana Alloy (B2 part 2). Data lives on a local-path volume (C3's default
+# StorageClass, B15), which pins Loki to the node that holds it.
 deploymentMode: SingleBinary
 
 loki:
@@ -25,8 +26,12 @@ loki:
 
 singleBinary:
   replicas: 1
+  # Loki writes under /var/loki; without a volume there the chart mounts nothing and Loki fails on
+  # the read-only root filesystem (seen on the first C3 bring-up, 2026-10-27).
   persistence:
-    enabled: false # no StorageClass yet
+    enabled: true
+    storageClass: local-path
+    size: 20Gi
 
 # Single-binary mode: none of the scalable components, caches, gateway, canary or MinIO.
 read: {replicas: 0}

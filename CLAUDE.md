@@ -22,7 +22,7 @@ Priority order when trading off effort: ops agent loop > Slurm depth > GPU stack
 | C2 | `c2` | CPU + A6000 48GB | Inference replica + Slinky training |
 | C3 | `c3` | 3 CPU nodes | Ops control plane: agent, executor, Argo CD, observability |
 
-Hosts are provisioned by hand (MI300X: HotAisle; CPU/A100/A6000: Prime Intellect) and reached over SSH on public IPs. Kubeconfigs: `~/.kube/a-demo/<cluster>.yaml`. Addressing plan: `infra/ansible/README.md`.
+Hosts are rented per phase and reached over SSH on public IPs: C3 on Verda (CPU, FIN), C1/C2 on Massed Compute (GPU nodes and their control planes, US; Massed blocks inbound 6443, so kubectl to C2 goes through an SSH tunnel, `~/.kube/a-demo/c2-tunnel.yaml`), MI300X on HotAisle when available. Kubeconfigs: `~/.kube/a-demo/<cluster>.yaml`. Addressing plan: `infra/ansible/README.md`.
 
 ### C1 accelerator layout
 
@@ -83,10 +83,10 @@ Track status here. Each block must meet its "done when" before it's marked done.
 
 | ID | Block | Depends on | Done when | Status |
 |---|---|---|---|---|
-| B0 | Provisioning (Ansible, kubeadm, Cilium) | — | `cilium status` green on all 3 clusters | in progress (C2 verified 2026-10-27; C1, C3 pending) |
-| B1 | GitOps hub (Argo CD on C3) | B0 | Git change lands on all 3 clusters | in progress (manifests written; not yet run) |
+| B0 | Provisioning (Ansible, kubeadm, Cilium) | — | `cilium status` green on all 3 clusters | in progress (C2 + C3 verified 2026-10-27 on Massed/Verda; C1 pending) |
+| B1 | GitOps hub (Argo CD on C3) | B0 | Git change lands on all 3 clusters | in progress (Argo CD on C3 manages C2 + C3; C1 not registered yet) |
 | B2 | Observability baseline (push to C3: Prometheus agents + Alloy → Prometheus + Loki + Grafana) | B1 | One dashboard shows all clusters' nodes | in progress (hub + agents written; not yet run) |
-| B3 | NVIDIA stack (GPU Operator in DRA mode, static MIG, DCGM) | B1 | C1's ResourceSlice has 3x 2g.20gb + 1x 1g.20gb MIG devices, C2's the A6000; a claim-based test pod runs on each | in progress (device-plugin variant verified on hardware 2026-10-27; DRA variant not yet run) |
+| B3 | NVIDIA stack (GPU Operator in DRA mode, static MIG, DCGM) | B1 | C1's ResourceSlice has 3x 2g.20gb + 1x 1g.20gb MIG devices, C2's the A6000; a claim-based test pod runs on each | in progress (DRA verified on C2 2026-10-27: A6000 in a gpu.nvidia.com ResourceSlice, model-a's claim allocated; C1 MIG pending) |
 | B4 | AMD stack (AMD DRA driver if it supports MI300X, else AMD GPU Operator; exporter) | B1 | MI300X allocatable (ResourceSlice, or `amd.com/gpu` as fallback); ROCm smoke pod runs | todo |
 | B5 | Cluster Mesh + Hubble Relay | B0 | Echo global service fails over C1→C2, visible in Hubble | todo |
 | B6 | Egress gateways + default-deny + FQDN allowlist | B5 | Agent ns reaches only Jira/GitHub/LLM API | todo |
