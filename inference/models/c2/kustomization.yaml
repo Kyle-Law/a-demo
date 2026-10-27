@@ -5,6 +5,7 @@ kind: Kustomization
 namespace: inference
 resources:
   - namespace.yaml
+  - gpu-claims.yaml
   - ../model-a
 labels:
   - pairs: {cluster: c2, tenant: shared} # CLAUDE.md contract: every pod carries cluster/tenant/model
@@ -12,4 +13,5 @@ labels:
 patches:
   - target: {kind: Deployment, name: model-a-vllm}
     patch: |-
-      - {op: add, path: /spec/template/spec/containers/0/resources/limits/nvidia.com~1gpu, value: 1}
+      - {op: add, path: /spec/template/spec/resourceClaims, value: [{name: gpu, resourceClaimTemplateName: a6000}]}
+      - {op: add, path: /spec/template/spec/containers/0/resources/claims, value: [{name: gpu}]}

@@ -1,6 +1,6 @@
 # INTELLECT-3 (106B MoE, 12B active) in FP8 on the C1 MI300X: the large model, and the ops
 # agent's primary LLM (the agent keeps an external fallback). Flags from the model card.
-# Needs B4 (AMD GPU Operator) for the amd.com/gpu resource.
+# Needs B4 (AMD stack) to publish the MI300X; claimed via ../c1/gpu-claims.yaml (mi300x).
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:

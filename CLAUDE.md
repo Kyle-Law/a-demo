@@ -29,8 +29,8 @@ Hosts are provisioned by hand (MI300X: HotAisle; CPU/A100/A6000: Prime Intellect
 - A100 MIG profiles `14,14,14,15` = 3x `2g.20gb` + 1x `1g.20gb`, allocated through DRA (`mig.nvidia.com` DeviceClass, CEL on `profile`; see decision 10).
   - 2x `2g.20gb`: model A replicas (same model, two pods; never tensor-parallel across MIG slices — not possible)
   - 1x `2g.20gb`: model B
-  - 1x `1g.20gb`: embedding + reranker (agent retrieval over runbooks/tickets), time-sliced: advertised as 2x
-    `nvidia.com/mig-1g.20gb.shared`
+  - 1x `1g.20gb`: embedding + reranker (agent retrieval over runbooks/tickets), both pods reference one shared
+    ResourceClaim (`inference/models/c1/gpu-claims.yaml`); each caps itself at 40% of the slice's memory
 - Models (`inference/models/`): A = Qwen3-4B-Instruct-2507, B = Qwen3.5-2B (vision), embed/rerank =
   Qwen3-Embedding-0.6B / Qwen3-Reranker-0.6B, MI300X = INTELLECT-3-FP8. Served under stable names
   (`model-a`, `model-b`, `embed`, `rerank`, `intellect-3`).
@@ -58,7 +58,7 @@ Hosts are provisioned by hand (MI300X: HotAisle; CPU/A100/A6000: Prime Intellect
 7. **Agent-authored runbooks are never executable until a human merges the PR.**
 8. **Runbooks live in a separate repo** so the agent's GitHub token is scoped to that repo only.
 9. **Host WireGuard mesh under everything.** All nodes of all clusters share `wg0` (`172.30.0.0/16`); the wg IP is the node IP. Cilium uses VXLAN over `wg0` with Cilium encryption off. Needed because C1 spans two providers and public IPs may be NATed. Pod CIDRs (`10.{1,2,3}.0.0/16`) and Cilium cluster IDs (1–3) must stay unique for Cluster Mesh.
-10. **GPUs are allocated with DRA wherever supported**, not the device plugin. NVIDIA: GPU Operator in `GPUCluster` (DRA) mode with the host's pre-installed driver; workloads use ResourceClaims against `gpu.nvidia.com` / `mig.nvidia.com`, never `nvidia.com/gpu` or `nvidia.com/mig-*` limits. Pods that share a device (embed + rerank on the 1g slice; vLLM + Slurm on the A6000) reference one shared ResourceClaim. MIG is static (host unit); DynamicMIG is alpha and a later demo only. `GPUCluster` cannot coexist with or migrate in place from `ClusterPolicy`, so flipping back means reinstalling the GPU stack. Use the device plugin only where a component can't consume DRA (check Slinky in B11, the AMD DRA driver on MI300X in B4).
+10. **GPUs are allocated with DRA wherever supported**, not the device plugin. NVIDIA: GPU Operator in `GPUCluster` (DRA) mode with the host's pre-installed driver; workloads use ResourceClaims against `gpu.nvidia.com` / `mig.nvidia.com`, never `nvidia.com/gpu` or `nvidia.com/mig-*` limits. Pods that share a device (embed + rerank on the 1g slice; vLLM + Slurm on the A6000) reference one shared ResourceClaim; claims are namespaced, so sharers must live in one namespace. MIG is static (host unit); DynamicMIG is alpha and a later demo only. `GPUCluster` cannot coexist with or migrate in place from `ClusterPolicy`, so flipping back means reinstalling the GPU stack. Use the device plugin only where a component can't consume DRA (check Slinky in B11, the AMD DRA driver on MI300X in B4).
 
 ## Repository layout
 

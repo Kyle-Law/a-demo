@@ -1,10 +1,11 @@
-# C1: A100 80GB in MIG layout a-demo-c1 (3x 2g.20gb + 1x 1g.20gb) and the MI300X.
+# C1: A100 80GB MIG slices (3x 2g.20gb + 1x 1g.20gb, roles/nvidia_mig) and the MI300X, claimed via DRA.
 # Synced by clusters/c1/models.yaml.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: inference
 resources:
   - namespace.yaml
+  - gpu-claims.yaml
   - ../model-a
   - ../model-b
   - ../embed
@@ -18,14 +19,18 @@ patches:
   - target: {kind: Deployment, name: model-a-vllm}
     patch: |-
       - {op: replace, path: /spec/replicas, value: 2}
-      - {op: add, path: /spec/template/spec/containers/0/resources/limits/nvidia.com~1mig-2g.20gb, value: 1}
+      - {op: add, path: /spec/template/spec/resourceClaims, value: [{name: gpu, resourceClaimTemplateName: mig-2g-20gb}]}
+      - {op: add, path: /spec/template/spec/containers/0/resources/claims, value: [{name: gpu}]}
   - target: {kind: Deployment, name: model-b-vllm}
     patch: |-
-      - {op: add, path: /spec/template/spec/containers/0/resources/limits/nvidia.com~1mig-2g.20gb, value: 1}
-  # embed and rerank time-slice the single 1g.20gb slice (".shared": two replicas advertised).
+      - {op: add, path: /spec/template/spec/resourceClaims, value: [{name: gpu, resourceClaimTemplateName: mig-2g-20gb}]}
+      - {op: add, path: /spec/template/spec/containers/0/resources/claims, value: [{name: gpu}]}
+  # embed and rerank reference the same ResourceClaim, so both get the single 1g.20gb slice.
   - target: {kind: Deployment, name: (embed|rerank)-vllm}
     patch: |-
-      - {op: add, path: /spec/template/spec/containers/0/resources/limits/nvidia.com~1mig-1g.20gb.shared, value: 1}
+      - {op: add, path: /spec/template/spec/resourceClaims, value: [{name: gpu, resourceClaimName: mig-1g-20gb-shared}]}
+      - {op: add, path: /spec/template/spec/containers/0/resources/claims, value: [{name: gpu}]}
   - target: {kind: Deployment, name: intellect-3-vllm}
     patch: |-
-      - {op: add, path: /spec/template/spec/containers/0/resources/limits/amd.com~1gpu, value: 1}
+      - {op: add, path: /spec/template/spec/resourceClaims, value: [{name: gpu, resourceClaimTemplateName: mi300x}]}
+      - {op: add, path: /spec/template/spec/containers/0/resources/claims, value: [{name: gpu}]}
