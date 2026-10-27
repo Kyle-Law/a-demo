@@ -1,0 +1,69 @@
+# Tests for everything with code (B13 bridge + rule contracts, B14 agent), and the ops-agent image.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+      - name: Install test dependencies
+        run: pip install pytest==8.4.2 pyyaml==6.0.3 -r agent/ops-agent/requirements.txt
+      - name: Alert bridge and ticket-rule contract (B13)
+        run: pytest -q agent/alert-bridge/tests
+      - name: Ops agent (B14)
+        working-directory: agent/ops-agent
+        run: pytest -q
+
+  ops-agent-image:
+    needs: test
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE: ghcr.io/kyle-law/a-demo-ops-agent
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      # Version tags are immutable: the Deployment pins one. Push it only the first time; later
+      # builds of the same version get only their sha- tag (bump pyproject's version to release).
+      - name: Version tag, unless it exists already
+        id: version
+        run: |
+          version=$(python3 -c 'import tomllib; print(tomllib.load(open("agent/ops-agent/pyproject.toml","rb"))["project"]["version"])')
+          if docker buildx imagetools inspect "$IMAGE:$version" >/dev/null 2>&1; then
+            echo "tag=" >> "$GITHUB_OUTPUT"; echo "$IMAGE:$version exists; pushing only the sha tag"
+          else
+            echo "tag=type=raw,value=$version" >> "$GITHUB_OUTPUT"
+          fi
+      - id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=sha
+            ${{ steps.version.outputs.tag }}
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: agent/ops-agent
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
