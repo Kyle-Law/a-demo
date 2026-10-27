@@ -1,8 +1,8 @@
 # Turning MIG mode on needs a GPU reset. On Massed Compute VMs the reset always fails
-# ("In use by another client"), and GPU Operator's mig-manager cannot reboot the host from its
-# container: with WITH_REBOOT=true it stops kubelet, then its reboot only re-executes systemd,
-# leaving the node NotReady. So MIG mode is turned on here, with a real reboot, before the node
-# joins. mig-manager then only creates the slices (platform/gpu-operator), which needs no reset.
+# ("In use by another client"), so MIG mode is turned on here, with a real reboot, before the
+# node joins. GPU Operator runs in DRA mode (GPUCluster), which has no mig-manager, and the DRA
+# driver only discovers slices that exist when it starts; so the slices are created here too,
+# by a unit that runs at every boot before kubelet (MIG instances don't survive a reboot).
 
 - name: Read MIG mode (current, pending)
   ansible.builtin.command: nvidia-smi --query-gpu=mig.mode.current,mig.mode.pending --format=csv,noheader
@@ -28,3 +28,22 @@
   ansible.builtin.assert:
     that: nvidia_mig_mode_after.stdout_lines | unique == ['Enabled']
     fail_msg: "MIG mode is {{ nvidia_mig_mode_after.stdout_lines }} after reboot"
+
+- name: Install the MIG layout script ({{ mig_layout }})
+  ansible.builtin.template:
+    src: a-demo-mig-layout.sh.j2
+    dest: /usr/local/sbin/a-demo-mig-layout
+    mode: "0755"
+
+- name: Install the MIG layout unit
+  ansible.builtin.copy:
+    src: a-demo-mig-layout.service
+    dest: /etc/systemd/system/a-demo-mig-layout.service
+    mode: "0644"
+
+- name: Create the slices now and at every boot, before kubelet
+  ansible.builtin.systemd_service:
+    name: a-demo-mig-layout
+    enabled: true
+    state: started
+    daemon_reload: true
