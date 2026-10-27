@@ -35,7 +35,7 @@ cat > "$ca" <<'PEM'
 {{ hostvars[host].vault_minter_ca | trim }}
 PEM
 vault write kubernetes-{{ cluster }}/config \
-  kubernetes_host={{ 'https://kubernetes.default.svc' if cluster == 'c3' else 'https://' ~ hostvars[host].wg_ip ~ ':6443' }} \
+  kubernetes_host={{ vault_cluster_endpoints[cluster] }} \
   kubernetes_ca_cert=@"$ca" service_account_jwt=@"$jwt" disable_local_ca_jwt=true
 rm -f "$jwt" "$ca"
 {% for role, spec in runbook.roles.items() if cluster in spec.clusters %}

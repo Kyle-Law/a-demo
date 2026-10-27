@@ -52,7 +52,19 @@ pytest -q                                 # tests: fake Jira, Prometheus, Vault 
 Configuration (environment): `JIRA_*` (same Secret as the alert bridge), `PROMETHEUS_URL`,
 `VAULT_ADDR`, `VAULT_ROLE`, `VAULT_JWT_PATH` (a projected ServiceAccount token with audience
 `vault`), `EXECUTOR_CLUSTERS_DIR` (`endpoints.json` plus a `<cluster>.crt` CA per cluster),
-`EXECUTOR_APPROVERS`, `RUNBOOKS_REPO`/`RUNBOOKS_REF`. The C3 Deployment comes in the next PR.
+`EXECUTOR_APPROVERS`, `RUNBOOKS_REPO`/`RUNBOOKS_REF`.
+
+## On C3
+
+`deploy/` (Argo CD app `clusters/c3/runbook-executor.yaml`), in namespace `ops`:
+- ServiceAccount `runbook-executor` with **no RBAC at all** and no Kubernetes API token mounted.
+  The pod gets one projected token with audience `vault`, which lasts 10 minutes; that's all it can
+  log in to Vault with.
+- `jira-credentials` (B13) and the ConfigMap `runbook-executor-clusters` come from
+  `infra/ansible/gitops.yml` (`roles/vault_config`, tag `vault`). The ConfigMap holds each cluster's
+  API endpoint (the hub's in-cluster, the spokes' over the WireGuard mesh) and its CA. A run that
+  reaches only some clusters updates their entries and keeps the others.
+- To restrict who can approve, set `EXECUTOR_APPROVERS` in `deploy/deployment.yaml` to Jira accountIds.
 
 `tests/fixtures/a-demo-runbooks` is a copy of the runbooks repo at cd67a2e (schema and the three
 runbooks), so the tests exercise the real runbooks.
