@@ -1,0 +1,30 @@
+# Model-aware routing, step 1: before route matching, read the OpenAI "model" field from the body
+# into X-Gateway-Base-Model-Name. The HTTPRoute (step 2) matches that header to a backend. This is
+# native agentgateway content routing, so there is no payload-processor ext-proc hop.
+#
+# The map is the list of names clients may use. Unknown names produce no header, match no route
+# and get a 404. B12 adds LoRA adapter names here, mapped to model-a (adapters are served by
+# model A's pool).
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: model-routing
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: inference-gateway
+  traffic:
+    phase: PreRouting
+    transformation:
+      request:
+        set:
+          - name: X-Gateway-Base-Model-Name
+            value: |
+              {
+                "model-a": "model-a",
+                "model-b": "model-b",
+                "embed": "embed",
+                "rerank": "rerank",
+                "intellect-3": "intellect-3"
+              }[string(json(request.body).model)]

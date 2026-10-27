@@ -1,0 +1,7 @@
+# Inference gateway on C2. Synced by clusters/c2/inference-gateway.yaml.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: inference
+resources:
+  - ../base
+  - httproute.yaml

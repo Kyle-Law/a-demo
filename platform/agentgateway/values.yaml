@@ -1,0 +1,5 @@
+# agentgateway v1.6.0, the Gateway API implementation for inference routing (CLAUDE.md decision 2).
+# Pinned in clusters/c1/agentgateway.yaml and clusters/c2/agentgateway.yaml (charts agentgateway-crds
+# and agentgateway). It reads InferencePools natively and calls each pool's EPP over ext-proc.
+inferenceExtension:
+  enabled: true # off by default; without it InferencePool backendRefs are ignored

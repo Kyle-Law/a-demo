@@ -1,0 +1,33 @@
+# B8: agentgateway (Gateway API + inference routing) on C1.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: agentgateway-c1
+  namespace: argocd
+spec:
+  project: default
+  sources:
+    - repoURL: cr.agentgateway.dev/charts # OCI registry
+      chart: agentgateway-crds
+      targetRevision: v1.6.0 # keep both charts on the same version
+    - repoURL: cr.agentgateway.dev/charts
+      chart: agentgateway
+      targetRevision: v1.6.0
+      helm:
+        releaseName: agentgateway
+        valueFiles:
+          - $values/platform/agentgateway/values.yaml
+    - repoURL: https://github.com/Kyle-Law/a-demo.git
+      targetRevision: main
+      ref: values
+  destination:
+    name: c1
+    namespace: agentgateway-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+      - SkipDryRunOnMissingResource=true # Gateway API CRDs come from gateway-api-crds-c1

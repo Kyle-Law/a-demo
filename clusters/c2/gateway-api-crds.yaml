@@ -1,0 +1,27 @@
+# B8: Gateway API (standard channel) and Gateway API Inference Extension CRDs on C2, straight from
+# the upstream repos at pinned tags. Only the InferencePool CRD from GIE: InferencePoolImport is
+# alpha and CLAUDE.md decision 1 says not to depend on it.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: gateway-api-crds-c2
+  namespace: argocd
+spec:
+  project: default
+  sources:
+    - repoURL: https://github.com/kubernetes-sigs/gateway-api.git
+      targetRevision: v1.6.3
+      path: config/crd # kustomization of the standard-channel CRDs
+    - repoURL: https://github.com/kubernetes-sigs/gateway-api-inference-extension.git
+      targetRevision: v1.6.2
+      path: config/crd/bases
+      directory:
+        include: inference.networking.k8s.io_inferencepools.yaml
+  destination:
+    name: c2
+  syncPolicy:
+    automated:
+      prune: false # deleting a CRD deletes every Gateway, route and pool with it
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true # CRDs exceed client-side apply's annotation size limit
