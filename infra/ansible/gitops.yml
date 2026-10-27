@@ -21,3 +21,13 @@
     - grafana_admin # B2: Grafana's admin Secret, before Argo CD syncs the hub's monitoring stack
     - jira_credentials # B13: the alert bridge's Jira Secret, from the git-ignored .jira.env
     - ops_agent_secrets # B14: the agent's read-only kubeconfigs and optional Anthropic key
+
+# B15: Vault starts sealed. Waits for Argo CD to start it, initializes it once (keys to the
+# git-ignored .vault-init.json on the controller) and unseals every replica. After a Vault pod
+# restarts: ansible-playbook gitops.yml --tags vault
+- name: Initialize and unseal Vault on the hub
+  hosts: control_plane:&c3
+  become: true
+  roles:
+    - role: vault_unseal
+      tags: [vault]

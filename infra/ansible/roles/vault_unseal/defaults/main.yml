@@ -1,0 +1,6 @@
+vault_namespace: vault
+vault_replicas: 3 # keep equal to server.ha.replicas in platform/vault/values.yaml
+vault_key_shares: 3
+vault_key_threshold: 2
+# Unseal keys and the root token, on the controller only. Git-ignored; losing it loses Vault's data.
+vault_init_file: "{{ repo_root }}/.vault-init.json"

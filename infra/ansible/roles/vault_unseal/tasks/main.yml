@@ -1,0 +1,88 @@
+# B15: initializes Vault once, then unseals every replica. Vault starts sealed after every restart
+# and there's no cloud KMS for auto-unseal here, so re-run after a Vault pod restarts:
+#   ansible-playbook gitops.yml --tags vault
+# Keys and the root token go to vault_init_file on the controller; they reach the pods on stdin
+# (never as command arguments) and never Git.
+- name: Wait for Argo CD to start the Vault pods
+  ansible.builtin.command: >-
+    kubectl --context {{ kube_context }} -n {{ vault_namespace }} get pods
+    -l app.kubernetes.io/name=vault,component=server
+    -o jsonpath={.items[*].status.containerStatuses[0].started}
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: vault_pods
+  until: vault_pods.stdout.split() | select('equalto', 'true') | list | length == vault_replicas
+  retries: 60
+  delay: 10
+  changed_when: false
+
+- name: Read vault-0's status
+  ansible.builtin.command: kubectl --context {{ kube_context }} -n {{ vault_namespace }} exec vault-0 -- vault status -format=json
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: vault_status
+  changed_when: false
+  failed_when: vault_status.rc not in [0, 2] # 2 = sealed
+
+- name: Look for the init file on the controller
+  ansible.builtin.stat:
+    path: "{{ vault_init_file }}"
+  register: vault_init_stat
+  delegate_to: localhost
+  become: false
+
+- name: Refuse to continue when the init file and Vault disagree
+  ansible.builtin.fail:
+    msg: >-
+      {{ 'Vault is initialized but ' ~ vault_init_file ~ ' is missing: it cannot be unsealed without those keys.'
+         if (vault_status.stdout | from_json).initialized else
+         'Vault is not initialized but ' ~ vault_init_file ~ ' exists (keys of an earlier Vault?). Move it aside, then re-run.' }}
+  when: (vault_status.stdout | from_json).initialized != vault_init_stat.stat.exists
+
+- name: Initialize Vault
+  when: not (vault_status.stdout | from_json).initialized
+  block:
+    - name: Run vault operator init on vault-0
+      ansible.builtin.command: >-
+        kubectl --context {{ kube_context }} -n {{ vault_namespace }} exec vault-0 --
+        vault operator init -key-shares={{ vault_key_shares }} -key-threshold={{ vault_key_threshold }} -format=json
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      register: vault_init
+      no_log: true
+
+    - name: Save the unseal keys and root token on the controller
+      ansible.builtin.copy:
+        content: "{{ vault_init.stdout }}"
+        dest: "{{ vault_init_file }}"
+        mode: "0600"
+      delegate_to: localhost
+      become: false
+      no_log: true
+
+- name: Load the unseal keys and root token
+  ansible.builtin.set_fact:
+    vault_keys: "{{ (lookup('ansible.builtin.file', vault_init_file) | from_json).unseal_keys_b64 }}"
+    vault_root_token: "{{ (lookup('ansible.builtin.file', vault_init_file) | from_json).root_token }}"
+  no_log: true
+
+# vault-0 first: the others join its Raft cluster (retry_join) when they're unsealed.
+- name: Unseal each replica
+  ansible.builtin.include_tasks: unseal.yml
+  loop: "{{ range(vault_replicas) | map('regex_replace', '^', 'vault-') | list }}"
+  loop_control:
+    loop_var: vault_pod
+
+- name: Enable the file audit device (every token Vault mints is logged)
+  ansible.builtin.command: >-
+    kubectl --context {{ kube_context }} -n {{ vault_namespace }} exec -i vault-0 --
+    sh -c 'read -r VAULT_TOKEN; export VAULT_TOKEN;
+    vault audit list -format=json 2>/dev/null | grep -q "\"file/\"" && exit 0;
+    vault audit enable file file_path=/vault/audit/audit.log && echo enabled'
+  args:
+    stdin: "{{ vault_root_token }}"
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: vault_audit
+  changed_when: "'enabled' in vault_audit.stdout"
+  no_log: true

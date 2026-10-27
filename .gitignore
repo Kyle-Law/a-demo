@@ -12,3 +12,5 @@ kubeconfig*.yaml
 .env
 *.env
 .env.*
+# Vault unseal keys and root token (infra/ansible roles/vault_unseal)
+.vault-init.json
