@@ -1,0 +1,77 @@
+# The read-only ops agent (agent/ops-agent). It talks to Jira, the hub's Prometheus and Loki, every
+# cluster's API through read-only kubeconfigs, and the LLM chain. It needs no Kubernetes identity of
+# its own on C3: its C3 access is the c3.yaml kubeconfig like any other cluster's.
+# Secrets (never in Git; infra/ansible/gitops.yml): jira-credentials (B13), ops-agent-kubeconfigs,
+# ops-agent-llm (optional ANTHROPIC_API_KEY).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ops-agent
+  labels:
+    app: ops-agent
+spec:
+  replicas: 1 # one poller, so a ticket is never triaged twice at once
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: ops-agent
+  template:
+    metadata:
+      labels:
+        app: ops-agent
+        cluster: c3
+        tenant: platform
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: agent
+          image: ghcr.io/kyle-law/a-demo-ops-agent:0.2.0 # built by .github/workflows/ci.yml when this version lands on main
+          args: ["run"]
+          env:
+            # intellect-3 (MI300X, C1) -> model-a on C1 -> model-a on C2 -> Claude. The C1/C2
+            # gateways are reached over the WireGuard mesh (inference/gateways/base/mesh-nodeport.yaml).
+            - name: AGENT_LLM_CHAIN
+              value: >-
+                openai|intellect-3|http://172.30.1.10:30080/v1|intellect-3-c1,
+                openai|model-a|http://172.30.1.10:30080/v1|model-a-c1,
+                openai|model-a|http://172.30.2.10:30080/v1|model-a-c2,
+                anthropic|claude-haiku-5-5
+            - name: AGENT_KUBECONFIG_DIR
+              value: /etc/ops-agent/kubeconfigs
+          envFrom:
+            - secretRef:
+                name: jira-credentials
+            - secretRef:
+                name: ops-agent-llm
+                optional: true # without it the chain ends at model-a
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: kubeconfigs
+              mountPath: /etc/ops-agent/kubeconfigs
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp # kubectl's discovery cache
+      volumes:
+        - name: kubeconfigs
+          secret:
+            secretName: ops-agent-kubeconfigs
+            defaultMode: 0400
+        - name: tmp
+          emptyDir: {}

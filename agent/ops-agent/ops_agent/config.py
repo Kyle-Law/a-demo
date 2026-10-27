@@ -5,11 +5,13 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 
-# provider|model|base_url entries, tried in order. "|" because URLs contain ":".
+# provider|model|base_url[|label] entries, tried in order. "|" because URLs contain ":". The label
+# names the entry in logs and in the ticket's rca-by-<label> (defaults to the model), so the same
+# model behind two clusters' gateways stays distinguishable.
 DEFAULT_LLM_CHAIN = ",".join([
     "openai|intellect-3|http://inference-gateway.inference.svc/v1",  # MI300X (c1)
     "openai|model-a|http://inference-gateway.inference.svc/v1",      # A100 MIG / A6000 (c1, c2)
-    "anthropic|claude-opus-5-5",                                     # external, survives our GPUs failing
+    "anthropic|claude-haiku-5-5",                                    # external, survives our GPUs failing
 ])
 
 
@@ -18,6 +20,7 @@ class LLMEntry:
     kind: str  # "openai" (OpenAI-compatible, our vLLM) or "anthropic"
     model: str
     base_url: str = ""
+    label: str = ""
 
 
 @dataclass
@@ -42,12 +45,12 @@ def parse_chain(spec: str) -> list[LLMEntry]:
     entries = []
     for item in filter(None, (s.strip() for s in spec.split(","))):
         parts = item.split("|")
-        if parts[0] == "openai" and len(parts) == 3:
-            entries.append(LLMEntry("openai", parts[1], parts[2]))
+        if parts[0] == "openai" and len(parts) in (3, 4):
+            entries.append(LLMEntry("openai", parts[1], parts[2], parts[3] if len(parts) == 4 else parts[1]))
         elif parts[0] == "anthropic" and len(parts) == 2:
             entries.append(LLMEntry("anthropic", parts[1]))
         else:
-            raise ValueError(f"bad AGENT_LLM_CHAIN entry '{item}' (want openai|model|url or anthropic|model)")
+            raise ValueError(f"bad AGENT_LLM_CHAIN entry '{item}' (want openai|model|url[|label] or anthropic|model)")
     return entries
 
 

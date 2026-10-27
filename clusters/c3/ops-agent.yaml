@@ -1,0 +1,21 @@
+# B14: the read-only ops agent on C3 (agent/ops-agent/deploy).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ops-agent
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Kyle-Law/a-demo.git
+    targetRevision: main
+    path: agent/ops-agent/deploy
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: ops
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

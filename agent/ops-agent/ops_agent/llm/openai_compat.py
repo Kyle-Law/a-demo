@@ -9,7 +9,7 @@ import logging
 
 import openai
 
-from . import BadAnswer, Dispatch, LoopResult, ProviderUnavailable, ToolSpec
+from . import BadAnswer, Dispatch, LoopResult, ProviderUnavailable, ToolSpec, finish_problems
 
 log = logging.getLogger("ops-agent.llm.openai")
 
@@ -22,7 +22,10 @@ class OpenAICompatProvider:
         # intellect-3 reasons before every answer (a short question took 2.4k tokens on the
         # MI300X), so leave room: too small and the answer arrives empty.
         self.max_tokens = max_tokens
-        self.client = client or openai.OpenAI(base_url=base_url, api_key=api_key, timeout=timeout, max_retries=1)
+        # Connect fast, read slowly: a cluster that dropped off the network must fail over in
+        # seconds, while a reasoning model may legitimately take minutes to answer.
+        self.client = client or openai.OpenAI(base_url=base_url, api_key=api_key, max_retries=1,
+                                              timeout=openai.Timeout(timeout, connect=5.0))
 
     def run(self, system: str, user: str, tools: list[ToolSpec], dispatch: Dispatch,
             finish_tool: str, max_turns: int) -> LoopResult:
@@ -63,9 +66,13 @@ class OpenAICompatProvider:
                     args = {}
                 else:
                     if call.function.name == finish_tool:
-                        result.final_args = args
-                        return result
-                    output, is_error = dispatch(call.function.name, args)
+                        rejected = finish_problems(tools, finish_tool, args)
+                        if not rejected:
+                            result.final_args = args
+                            return result
+                        output, is_error = rejected, True
+                    else:
+                        output, is_error = dispatch(call.function.name, args)
                 result.tool_log.append({"tool": call.function.name, "args": args,
                                         "is_error": is_error, "chars": len(output)})
                 messages.append({"role": "tool", "tool_call_id": call.id, "content": output})

@@ -63,13 +63,25 @@ def anthropic_reply(tool_name=None, args=None, stop="tool_use"):
             "usage": {"input_tokens": 1, "output_tokens": 1}}
 
 
+def test_anthropic_haiku_default_has_no_server_fallback(fake_server):
+    """Claude Haiku 5.5 (the demo default) has no server-side refusal fallback: plain messages.create."""
+    srv = fake_server(lambda m, p, b: (200, anthropic_reply(FINISH_TOOL, FINAL)))
+    import anthropic
+    client = anthropic.Anthropic(api_key="test", base_url=srv.url, max_retries=0)
+    res = AnthropicProvider(client=client).run("s", "u", TOOL_SPECS, echo_dispatch([]), FINISH_TOOL, 3)
+    body, headers = srv.requests[0]["body"], srv.requests[0]["headers"]
+    assert res.provider == "anthropic:claude-haiku-5-5" and body["model"] == "claude-haiku-5-5"
+    assert "fallbacks" not in body and "anthropic-beta" not in headers
+    assert body["output_config"] == {"effort": "high"} and "tool_choice" not in body
+
+
 def test_anthropic_tool_loop_request_shape(fake_server, monkeypatch):
     script = [anthropic_reply("prometheus_query", {"query": "up"}), anthropic_reply(FINISH_TOOL, FINAL)]
     srv = fake_server(lambda m, p, b: (200, script.pop(0)))
     import anthropic
     client = anthropic.Anthropic(api_key="test", base_url=srv.url, max_retries=0)
     calls = []
-    res = AnthropicProvider(client=client).run("sys", "user", TOOL_SPECS, echo_dispatch(calls), FINISH_TOOL, 5)
+    res = AnthropicProvider(model="claude-opus-5-5", client=client).run("sys", "user", TOOL_SPECS, echo_dispatch(calls), FINISH_TOOL, 5)
     assert res.final_args == FINAL and res.provider == "anthropic:claude-opus-5-5"
     assert calls == [("prometheus_query", {"query": "up"})]
     first, second = srv.requests[0], srv.requests[1]
@@ -110,3 +122,16 @@ def test_chain_falls_through_in_order():
     assert res is ok and [f.split(":")[0] for f in failures] == ["intellect-3", "model-a"]
     with pytest.raises(ProviderUnavailable, match="every provider failed"):
         run_chain([Scripted("a", ProviderUnavailable("x"))], "s", "u", TOOL_SPECS, None, FINISH_TOOL, 5)
+
+
+def test_invalid_finish_is_sent_back_for_correction(fake_server):
+    """intellect-3 on the MI300X wrote evidence with "arguments" instead of "query" (vLLM doesn't
+    enforce tool schemas). The provider rejects it with the problems and accepts the corrected call."""
+    bad = {**FINAL, "evidence": [{"source": "kubectl", "arguments": ["logs", "x"], "finding": "f"}]}
+    good = {**FINAL, "evidence": [{"source": "kubectl", "query": "kubectl logs x", "finding": "f"}]}
+    script = [openai_reply(FINISH_TOOL, bad), openai_reply(FINISH_TOOL, good)]
+    srv = fake_server(lambda m, p, b: (200, script.pop(0)))
+    res = OpenAICompatProvider("m", "m", base_url=f"{srv.url}/v1").run("s", "u", TOOL_SPECS, echo_dispatch([]), FINISH_TOOL, 5)
+    assert res.final_args == good
+    feedback = srv.requests[1]["body"]["messages"][-1]["content"]
+    assert "evidence[0].query is required" in feedback and "evidence[0].arguments is not allowed" in feedback

@@ -16,7 +16,9 @@
 - name: Create ops/jira-credentials
   when: jira_env_file.stat.exists
   vars:
-    jira_env: "{{ lookup('ansible.builtin.pipe', 'python3 ' ~ role_path ~ '/files/read_env.py ' ~ repo_root ~ '/.jira.env') | from_json }}"
+    jira_env: >-
+      {{ lookup('ansible.builtin.pipe', 'python3 ' ~ playbook_dir ~ '/files/read_env.py ' ~ repo_root ~ '/.jira.env'
+                ~ ' JIRA_API_URL JIRA_BASE_URL JIRA_EMAIL JIRA_API_TOKEN JIRA_PROJECT_KEY') | from_json }}
   block:
     - name: Create the ops namespace
       ansible.builtin.shell: >-

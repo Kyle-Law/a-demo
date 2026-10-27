@@ -96,7 +96,7 @@ Track status here. Each block must meet its "done when" before it's marked done.
 | B11 | Slinky (operator, slurmdbd, GRES, Pyxis/Enroot, DCGM prolog) | B3 | Containerized GPU job runs; failed diag drains node | todo |
 | B12 | Train-to-serve loop (LoRA → MinIO → dynamic adapter) | B9, B11 | One command: sbatch → new adapter answering | todo |
 | B13 | Incident intake (Alertmanager → Jira) + chaos scripts | B2 | Each fault yields exactly one ticket | in progress (bridge, routing, 4 ticket rules + chaos scripts written; not yet run) |
-| B14 | Read-only agent (triage + RCA) | B13 | Correct RCA with evidence on every scripted fault | in progress (agent core + tests written; deployment on C3 next; not yet run) |
+| B14 | Read-only agent (triage + RCA) | B13 | Correct RCA with evidence on every scripted fault | in progress (agent, CI image, read-only identities and C3 Deployment written; not yet run) |
 | B15 | Runbook repo + executor (Vault short-lived tokens, approval gate) | B14 | Merged runbook fixes a fault; ticket auto-closes | todo |
 | B16 | Runbook authoring (agent opens PRs) | B15 | Agent PR passes CI; executable after merge | todo |
 
