@@ -1,6 +1,6 @@
 # Embeddings for the agent's retrieval over runbooks and tickets. Shares the C1 MIG 1g.20gb
-# slice with ../rerank through device-plugin time-slicing (platform/gpu-operator/values.yaml),
-# so each server takes at most 40% of the slice's memory.
+# slice with ../rerank through one ResourceClaim (../c1/gpu-claims.yaml), so each server takes
+# at most 40% of the slice's memory.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
