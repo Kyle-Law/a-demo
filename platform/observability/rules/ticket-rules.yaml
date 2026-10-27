@@ -62,6 +62,26 @@ spec:
             summary: "{{ $labels.cluster }}/{{ $labels.namespace }}/{{ $labels.pod }} is unschedulable"
             description: "The pod has been unschedulable for 3 minutes. Compare its ResourceClaims with the cluster's ResourceSlices (kubectl get resourceclaims,resourceslices)."
             runbook_hint: pod-unschedulable
+        - alert: StrayInferencePod
+          # A pod no controller owns (made by hand: a debug shell, a test, a leftover) has been
+          # running in the inference namespace for 5 minutes. Unmanaged pods there can hold a GPU
+          # slice and dodge the tenant's quota and priority. chaos/stray-inference-pod.sh
+          # No runbook yet on purpose: the B16 demo has the agent propose one.
+          expr: |
+            label_replace(
+              max by (cluster, namespace, pod) (kube_pod_owner{namespace="inference", owner_kind="<none>"})
+                * on (cluster, namespace, pod)
+              max by (cluster, namespace, pod) (kube_pod_status_phase{namespace="inference", phase="Running"} == 1),
+              "resource", "pod/$1", "pod", "(.+)")
+          for: 5m
+          labels:
+            ticket: "true"
+            signal: StrayInferencePod
+            severity: warning
+          annotations:
+            summary: "{{ $labels.cluster }}/inference/{{ $labels.pod }} is running with no controller"
+            description: "A pod that no Deployment, Job or other controller owns has been running in the inference namespace for 5 minutes. Find out who started it (kubectl describe), then remove it."
+            runbook_hint: stray-inference-pod
     - name: a-demo.nodes
       rules:
         - alert: NodeNotReady
