@@ -1,0 +1,71 @@
+# B2: the observability hub on C3. C1 and C2 push metrics and logs here (B2 part 2);
+# see platform/observability/README.md.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kube-prometheus-stack-c3
+  namespace: argocd
+spec:
+  project: default
+  sources:
+    - repoURL: https://prometheus-community.github.io/helm-charts
+      chart: kube-prometheus-stack
+      targetRevision: 92.14.0 # keep equal to clusters/all/observability-agents.yaml
+      helm:
+        releaseName: kps
+        valueFiles:
+          - $values/platform/observability/kube-prometheus-stack/values.yaml
+          - $values/platform/observability/kube-prometheus-stack/values-hub.yaml
+        valuesObject:
+          prometheus:
+            prometheusSpec:
+              scrapeClasses:
+                - name: cluster
+                  default: true
+                  relabelings:
+                    - targetLabel: cluster
+                      replacement: c3
+    - repoURL: https://github.com/Kyle-Law/a-demo.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true # Prometheus Operator CRDs exceed client-side apply's annotation limit
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: loki-c3
+  namespace: argocd
+spec:
+  project: default
+  sources:
+    - repoURL: https://grafana.github.io/helm-charts
+      chart: loki
+      targetRevision: 7.5.0
+      helm:
+        releaseName: loki
+        valueFiles:
+          - $values/platform/observability/loki/values.yaml
+    - repoURL: https://github.com/Kyle-Law/a-demo.git
+      targetRevision: main
+      ref: values
+    - repoURL: https://github.com/Kyle-Law/a-demo.git
+      targetRevision: main
+      path: platform/observability/hub # loki-ingest NodePort
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

@@ -1,0 +1,40 @@
+# Loki 7.5.0 (app 3.6.16) on C3, single binary with filesystem storage: logs from every cluster
+# are pushed here by Grafana Alloy (B2 part 2). Same emptyDir caveat as Prometheus (values-hub.yaml).
+deploymentMode: SingleBinary
+
+loki:
+  auth_enabled: false # single tenant; the cluster label separates clusters
+  commonConfig:
+    replication_factor: 1
+  storage:
+    type: filesystem
+  schemaConfig:
+    configs:
+      - from: "2026-01-01"
+        store: tsdb
+        object_store: filesystem
+        schema: v13
+        index:
+          prefix: loki_index_
+          period: 24h
+  limits_config:
+    retention_period: 72h
+  compactor:
+    retention_enabled: true
+    delete_request_store: filesystem
+
+singleBinary:
+  replicas: 1
+  persistence:
+    enabled: false # no StorageClass yet
+
+# Single-binary mode: none of the scalable components, caches, gateway, canary or MinIO.
+read: {replicas: 0}
+write: {replicas: 0}
+backend: {replicas: 0}
+gateway: {enabled: false}
+chunksCache: {enabled: false}
+resultsCache: {enabled: false}
+lokiCanary: {enabled: false}
+test: {enabled: false}
+minio: {enabled: false}

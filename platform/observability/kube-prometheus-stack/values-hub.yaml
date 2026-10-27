@@ -1,0 +1,37 @@
+# The hub on C3: full Prometheus that also receives the agents' remote-write, Alertmanager (B13
+# sends alerts to Jira), and Grafana. Storage is emptyDir for now, so metrics are lost when the
+# Prometheus pod restarts. A StorageClass comes with Vault in B15.
+
+prometheus:
+  service:
+    # Remote-write target for the C1/C2 agents, reached over the WireGuard mesh at
+    # http://172.30.3.10:30090/api/v1/write (NodePorts are reachable on wg0 only; ufw blocks them
+    # on public interfaces).
+    type: NodePort
+    nodePort: 30090
+  prometheusSpec:
+    enableRemoteWriteReceiver: true
+    retention: 7d
+
+defaultRules:
+  # Every series carries cluster, so evaluate the default alert rules per cluster instead of
+  # mixing C1, C2 and C3 together.
+  additionalAggregationLabels: [cluster]
+
+grafana:
+  admin:
+    # Created once by infra/ansible/gitops.yml (random password, never in Git).
+    existingSecret: grafana-admin
+    userKey: admin-user
+    passwordKey: admin-password
+  sidecar:
+    dashboards:
+      multicluster:
+        global:
+          enabled: true # adds a cluster selector to the default dashboards (B2 "done when")
+  additionalDataSources:
+    - name: Loki
+      type: loki
+      uid: loki
+      url: http://loki.monitoring.svc:3100
+      access: proxy
