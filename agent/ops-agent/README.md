@@ -69,4 +69,23 @@ export AGENT_KUBECONFIG_DIR=~/.kube/a-demo-readonly   # read-only kubeconfigs, N
 cd agent/ops-agent && python -m ops_agent diagnose SUP-12
 ```
 
-Running it on C3 (image, read-only ServiceAccounts on every cluster, kubeconfigs, Deployment) is the next PR.
+## Run on C3
+
+| Piece | Where |
+|---|---|
+| Image `ghcr.io/kyle-law/a-demo-ops-agent:<version>` | `Dockerfile`, built by `.github/workflows/ci.yml` (version tags are immutable; bump `pyproject.toml` to release) |
+| Read-only `kube-system/ops-agent-reader` on every cluster (get/list/watch, never Secrets) | `infra/ansible/roles/ops_agent_reader`, run by `gitops.yml` |
+| `ops/ops-agent-kubeconfigs` (one per cluster), `ops/ops-agent-llm` (from `.agent.env`) | `infra/ansible/roles/ops_agent_secrets` |
+| Deployment, `AGENT_LLM_CHAIN` | `deploy/`, synced by `clusters/c3/ops-agent.yaml` |
+| C1/C2 gateways reachable from C3 | NodePort 30080 over the WireGuard mesh (`inference/gateways/base/mesh-nodeport.yaml`), until B9 |
+
+The chain on C3: `intellect-3-c1` → `model-a-c1` → `model-a-c2` → `anthropic:claude-opus-5-5`. Losing C1 falls
+through to C2's model A; losing both reaches Claude. A gone endpoint fails over within ~5 s (connect
+timeout); a reasoning model still gets minutes to answer.
+
+For the Claude fallback, put `ANTHROPIC_API_KEY=...` in a git-ignored `.agent.env` in the repo root and re-run
+`gitops.yml`. Without it, the chain ends at model A.
+
+```bash
+kubectl --context c3 -n ops logs deploy/ops-agent -f
+```

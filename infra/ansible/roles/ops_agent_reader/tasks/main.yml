@@ -1,0 +1,38 @@
+# B14: the ops agent's read-only ServiceAccount on this cluster. The hub play turns the token into
+# a kubeconfig for the agent (roles/ops_agent_secrets).
+- name: Create the ops-agent-reader ServiceAccount, read-only ClusterRole and token
+  ansible.builtin.command: kubectl --context {{ kube_context }} apply -f -
+  args:
+    stdin: "{{ lookup('ansible.builtin.file', 'ops-agent-reader.yaml') }}"
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: ops_agent_reader_apply
+  changed_when: "' created' in ops_agent_reader_apply.stdout or ' configured' in ops_agent_reader_apply.stdout"
+
+- name: Wait for the token controller to fill in the token
+  ansible.builtin.command: >-
+    kubectl --context {{ kube_context }} -n kube-system
+    get secret ops-agent-reader-token -o jsonpath={.data.token}
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: ops_agent_reader_token
+  until: ops_agent_reader_token.stdout | length > 0
+  retries: 10
+  delay: 3
+  changed_when: false
+  no_log: true
+
+- name: Read the cluster CA
+  ansible.builtin.command: >-
+    kubectl --context {{ kube_context }} config view --raw --minify
+    -o jsonpath={.clusters[0].cluster.certificate-authority-data}
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: ops_agent_reader_ca
+  changed_when: false
+
+- name: Hand token and CA to the hub play
+  ansible.builtin.set_fact:
+    ops_agent_reader_token: "{{ ops_agent_reader_token.stdout | b64decode }}"
+    ops_agent_reader_ca: "{{ ops_agent_reader_ca.stdout }}"
+  no_log: true

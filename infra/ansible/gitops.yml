@@ -7,6 +7,12 @@
   roles:
     - argocd_spoke
 
+- name: Read-only identity for the ops agent on every cluster (B14)
+  hosts: control_plane
+  become: true
+  roles:
+    - ops_agent_reader
+
 - name: Install Argo CD on the hub and hand over to Git
   hosts: control_plane:&c3
   become: true
@@ -14,3 +20,4 @@
     - argocd_hub
     - grafana_admin # B2: Grafana's admin Secret, before Argo CD syncs the hub's monitoring stack
     - jira_credentials # B13: the alert bridge's Jira Secret, from the git-ignored .jira.env
+    - ops_agent_secrets # B14: the agent's read-only kubeconfigs and optional Anthropic key

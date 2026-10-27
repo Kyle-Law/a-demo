@@ -22,7 +22,7 @@ def build_providers(cfg):
     for entry in cfg.llm_chain:
         if entry.kind == "openai":
             from .llm.openai_compat import OpenAICompatProvider
-            providers.append(OpenAICompatProvider(name=entry.model, model=entry.model, base_url=entry.base_url))
+            providers.append(OpenAICompatProvider(name=entry.label, model=entry.model, base_url=entry.base_url))
         else:
             from .llm.anthropic_fallback import AnthropicProvider
             providers.append(AnthropicProvider(model=entry.model))

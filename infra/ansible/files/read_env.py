@@ -1,21 +1,22 @@
-"""Print the Jira keys of a KEY=value env file (.jira.env) as JSON.
+"""Print selected keys of a KEY=value env file (.jira.env, .agent.env) as JSON.
+
+  python3 read_env.py <file> KEY [KEY ...]
 
 Blank lines and # comments are skipped; inline "  # ..." comments and surrounding quotes are
-stripped. Only the keys the alert bridge needs are printed.
+stripped. Only the named keys are printed, so nothing else in the file reaches Ansible.
 """
 import json
 import re
 import sys
 
-KEYS = {"JIRA_API_URL", "JIRA_BASE_URL", "JIRA_EMAIL", "JIRA_API_TOKEN", "JIRA_PROJECT_KEY"}
-
+path, keys = sys.argv[1], set(sys.argv[2:])
 out = {}
-with open(sys.argv[1]) as f:
+with open(path) as f:
     for line in f:
         line = line.strip()
         if not line or line.startswith("#") or "=" not in line:
             continue
         key, value = (part.strip() for part in line.split("=", 1))
-        if key in KEYS:
+        if key in keys:
             out[key] = re.sub(r"\s+#.*$", "", value).strip().strip("'\"")
 print(json.dumps(out))

@@ -1,0 +1,58 @@
+# B14: the ops agent's credentials on C3, never in Git:
+#  - ops/ops-agent-kubeconfigs: one read-only kubeconfig per cluster (<cluster>.yaml), from
+#    roles/ops_agent_reader
+#  - ops/ops-agent-llm: ANTHROPIC_API_KEY for the last link of the LLM chain, from the git-ignored
+#    .agent.env on the controller (optional; without it the chain ends at model-a)
+- name: Create the ops namespace
+  ansible.builtin.shell: >-
+    kubectl --context {{ kube_context }} create namespace ops --dry-run=client -o yaml
+    | kubectl --context {{ kube_context }} apply -f -
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: ops_agent_ns
+  changed_when: "' created' in ops_agent_ns.stdout"
+
+- name: Render one kubeconfig per cluster whose reader ran in this playbook run
+  ansible.builtin.set_fact:
+    ops_agent_kubeconfigs: >-
+      {{ ops_agent_kubeconfigs | default({})
+         | combine({hostvars[item].cluster_name ~ '.yaml': lookup('ansible.builtin.template', 'kubeconfig.yaml.j2')}) }}
+  loop: "{{ groups['control_plane'] }}"
+  when: hostvars[item].ops_agent_reader_token is defined
+  no_log: true
+
+- name: Apply ops/ops-agent-kubeconfigs
+  ansible.builtin.command: kubectl --context {{ kube_context }} apply -f -
+  args:
+    stdin: "{{ {'apiVersion': 'v1', 'kind': 'Secret', 'metadata': {'name': 'ops-agent-kubeconfigs', 'namespace': 'ops'}, 'stringData': ops_agent_kubeconfigs} | to_json }}"
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  when: ops_agent_kubeconfigs is defined
+  register: ops_agent_kubeconfigs_apply
+  changed_when: "' created' in ops_agent_kubeconfigs_apply.stdout or ' configured' in ops_agent_kubeconfigs_apply.stdout"
+  no_log: true
+
+- name: Check for .agent.env on the controller
+  ansible.builtin.stat:
+    path: "{{ repo_root }}/.agent.env"
+  register: ops_agent_env_file
+  delegate_to: localhost
+  become: false
+
+- name: Apply ops/ops-agent-llm (Anthropic key for the last link of the chain)
+  ansible.builtin.command: kubectl --context {{ kube_context }} apply -f -
+  args:
+    stdin: "{{ {'apiVersion': 'v1', 'kind': 'Secret', 'metadata': {'name': 'ops-agent-llm', 'namespace': 'ops'}, 'stringData': llm_env} | to_json }}"
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  vars:
+    llm_env: "{{ lookup('ansible.builtin.pipe', 'python3 ' ~ playbook_dir ~ '/files/read_env.py ' ~ repo_root ~ '/.agent.env ANTHROPIC_API_KEY') | from_json }}"
+  when: ops_agent_env_file.stat.exists
+  register: ops_agent_llm_apply
+  changed_when: "' created' in ops_agent_llm_apply.stdout or ' configured' in ops_agent_llm_apply.stdout"
+  no_log: true
+
+- name: Note a missing .agent.env
+  ansible.builtin.debug:
+    msg: "No {{ repo_root }}/.agent.env: the ops agent's LLM chain ends at model-a (no Claude fallback)."
+  when: not ops_agent_env_file.stat.exists

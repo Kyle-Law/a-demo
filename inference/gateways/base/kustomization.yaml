@@ -3,3 +3,4 @@ kind: Kustomization
 resources:
   - gateway.yaml
   - model-routing.yaml
+  - mesh-nodeport.yaml
