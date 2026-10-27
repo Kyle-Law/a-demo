@@ -1,0 +1,44 @@
+# B13: the Jira bridge's credentials, from the git-ignored .jira.env in the repo root on the
+# controller (JIRA_API_URL, JIRA_BASE_URL, JIRA_EMAIL, JIRA_API_TOKEN, JIRA_PROJECT_KEY). Applied
+# straight into C3 as ops/jira-credentials, never written to Git or to the host's disk.
+- name: Check for .jira.env on the controller
+  ansible.builtin.stat:
+    path: "{{ repo_root }}/.jira.env"
+  register: jira_env_file
+  delegate_to: localhost
+  become: false
+
+- name: Skip without .jira.env
+  ansible.builtin.debug:
+    msg: "No {{ repo_root }}/.jira.env; the alert bridge stays without credentials (no tickets)."
+  when: not jira_env_file.stat.exists
+
+- name: Create ops/jira-credentials
+  when: jira_env_file.stat.exists
+  vars:
+    jira_env: "{{ lookup('ansible.builtin.pipe', 'python3 ' ~ role_path ~ '/files/read_env.py ' ~ repo_root ~ '/.jira.env') | from_json }}"
+  block:
+    - name: Create the ops namespace
+      ansible.builtin.shell: >-
+        kubectl --context {{ kube_context }} create namespace ops --dry-run=client -o yaml
+        | kubectl --context {{ kube_context }} apply -f -
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      register: jira_credentials_ns
+      changed_when: "' created' in jira_credentials_ns.stdout"
+
+    - name: Apply the Secret
+      ansible.builtin.command: kubectl --context {{ kube_context }} apply -f -
+      args:
+        stdin: "{{ jira_secret | to_json }}"
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      vars:
+        jira_secret:
+          apiVersion: v1
+          kind: Secret
+          metadata: {name: jira-credentials, namespace: ops}
+          stringData: "{{ jira_env }}"
+      register: jira_credentials_apply
+      changed_when: "' created' in jira_credentials_apply.stdout or ' configured' in jira_credentials_apply.stdout"
+      no_log: true

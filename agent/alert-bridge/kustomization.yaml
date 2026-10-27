@@ -1,0 +1,14 @@
+# B13: Alertmanager -> Jira bridge on C3. Synced by clusters/c3/alert-bridge.yaml.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: ops
+resources:
+  - deployment.yaml
+  - service.yaml
+  - networkpolicy.yaml
+configMapGenerator:
+  # Bridge code, mounted into a stock python image (no image build). The hash suffix makes a
+  # code change roll the Deployment.
+  - name: alert-bridge-code
+    files:
+      - bridge.py

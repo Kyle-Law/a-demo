@@ -1,0 +1,19 @@
+# Only Alertmanager (monitoring namespace) may post alerts to the bridge.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: alert-bridge-ingress
+spec:
+  podSelector:
+    matchLabels:
+      app: alert-bridge
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - protocol: TCP
+          port: 8080
