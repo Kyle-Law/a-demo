@@ -1,0 +1,38 @@
+# Model B: a small vision-language model on one MIG 2g.20gb slice in C1. Different from model A
+# on purpose (it takes images), so model-aware routing is visible in the demo.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../base
+namePrefix: model-b-
+labels:
+  - pairs: {model: model-b}
+    includeSelectors: true
+configMapGenerator:
+  - name: model
+    literals:
+      - MODEL_ID=Qwen/Qwen3.5-2B
+      - MODEL_REVISION=15852e8c16360a2fea060d615a32b45270f8a8fc
+      - SERVED_NAME=model-b
+patches:
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: vllm
+      spec:
+        template:
+          metadata:
+            annotations:
+              a-demo.io/api: chat # tests/smoke.sh
+          spec:
+            containers:
+              - name: vllm
+                # 4.2 GiB of BF16 weights. Images only; video would need far more KV per request.
+                args:
+                  - $(MODEL_ID)
+                  - --revision=$(MODEL_REVISION)
+                  - --served-model-name=$(SERVED_NAME)
+                  - --max-model-len=16384
+                  - --gpu-memory-utilization=0.90
+                  - '--limit-mm-per-prompt={"image": 4, "video": 0}'

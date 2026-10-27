@@ -67,4 +67,4 @@ spec:
       image: nvcr.io/nvidia/k8s/cuda-sample:vectoradd-cuda12.5.0
       command: ["sh", "-c", "nvidia-smi -L && /cuda-samples/vectorAdd"]
       resources:
-        limits: {nvidia.com/mig-1g.20gb: 1}
+        limits: {nvidia.com/mig-1g.20gb.shared: 1} # time-sliced, see ../values.yaml devicePlugin

@@ -5,10 +5,29 @@
 driver:
   enabled: false
 
-# MIG slices are advertised per profile (nvidia.com/mig-2g.20gb, nvidia.com/mig-1g.20gb).
-# Non-MIG GPUs (A6000) keep advertising nvidia.com/gpu.
+# MIG slices are advertised per profile (nvidia.com/mig-2g.20gb; the 1g.20gb slice is shared,
+# see devicePlugin). Non-MIG GPUs (A6000) keep advertising nvidia.com/gpu.
 mig:
   strategy: mixed
+
+# embed and rerank (inference/models) share the single 1g.20gb slice by time-slicing. The slice
+# is advertised twice under a different name, nvidia.com/mig-1g.20gb.shared, so only workloads
+# that ask for a shared slice get one. Time-slicing shares compute but not memory limits: each
+# server caps itself with --gpu-memory-utilization.
+devicePlugin:
+  config:
+    create: true
+    name: a-demo-device-plugin-config
+    default: default
+    data:
+      default: |-
+        version: v1
+        sharing:
+          timeSlicing:
+            renameByDefault: true
+            resources:
+              - name: nvidia.com/mig-1g.20gb
+                replicas: 2
 
 migManager:
   # MIG *mode* is turned on by infra/ansible (roles/nvidia_mig, host var mig_enabled), because

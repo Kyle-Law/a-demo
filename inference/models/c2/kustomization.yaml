@@ -1,0 +1,15 @@
+# C2: one A6000 running a model A replica (cross-cluster failover target for C1).
+# Synced by clusters/c2/models.yaml. The Slurm prolog (B11) scales this to 0 during training.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: inference
+resources:
+  - namespace.yaml
+  - ../model-a
+labels:
+  - pairs: {cluster: c2, tenant: shared} # CLAUDE.md contract: every pod carries cluster/tenant/model
+    includeTemplates: true
+patches:
+  - target: {kind: Deployment, name: model-a-vllm}
+    patch: |-
+      - {op: add, path: /spec/template/spec/containers/0/resources/limits/nvidia.com~1gpu, value: 1}

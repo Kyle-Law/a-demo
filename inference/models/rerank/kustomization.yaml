@@ -1,0 +1,51 @@
+# Reranker for the agent's retrieval. Shares the C1 MIG 1g.20gb slice with ../embed (see there).
+# The original Qwen3-Reranker scores with its "yes"/"no" token logits; vLLM serves it as a
+# sequence classifier through these overrides plus the score template (vLLM docs, scoring.md).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../base
+namePrefix: rerank-
+labels:
+  - pairs: {model: rerank}
+    includeSelectors: true
+configMapGenerator:
+  - name: model
+    literals:
+      - MODEL_ID=Qwen/Qwen3-Reranker-0.6B
+      - MODEL_REVISION=e61197ed45024b0ed8a2d74b80b4d909f1255473
+      - SERVED_NAME=rerank
+  - name: score-template
+    files:
+      - qwen3_reranker.jinja
+patches:
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: vllm
+      spec:
+        template:
+          metadata:
+            annotations:
+              a-demo.io/api: rerank # tests/smoke.sh
+          spec:
+            containers:
+              - name: vllm
+                args:
+                  - $(MODEL_ID)
+                  - --revision=$(MODEL_REVISION)
+                  - --served-model-name=$(SERVED_NAME)
+                  - --runner=pooling
+                  - '--hf-overrides={"architectures": ["Qwen3ForSequenceClassification"], "classifier_from_token": ["no", "yes"], "is_original_qwen3_reranker": true}'
+                  - --chat-template=/templates/qwen3_reranker.jinja
+                  - --max-model-len=8192
+                  - --gpu-memory-utilization=0.40
+                resources:
+                  requests: {cpu: "1", memory: 4Gi}
+                  limits: {memory: 8Gi}
+                volumeMounts:
+                  - {name: score-template, mountPath: /templates}
+            volumes:
+              - name: score-template
+                configMap: {name: score-template}

@@ -1,0 +1,19 @@
+# B7: vLLM model servers on C1 (A100 MIG slices, MI300X).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: models-c1
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Kyle-Law/a-demo.git
+    targetRevision: main
+    path: inference/models/c1
+  destination:
+    name: c1
+    namespace: inference
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
