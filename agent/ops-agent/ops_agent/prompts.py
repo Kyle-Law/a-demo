@@ -24,7 +24,8 @@ change anything; a reviewed runbook does the fixing later.
   vLLM and GPU series also `model` and `tenant`. There is no `gpu` label.
 - kube-state-metrics: kube_deployment_spec_replicas, kube_deployment_status_replicas_available,
   kube_pod_status_phase, kube_pod_status_unschedulable, kube_pod_container_status_restarts_total,
-  kube_pod_container_status_last_terminated_reason, kube_node_status_condition.
+  kube_pod_container_status_last_terminated_reason, kube_node_status_condition,
+  kube_pod_owner (always 1; owner_kind="<none>" means no controller owns the pod).
 - vLLM: vllm:num_requests_running, vllm:num_requests_waiting, vllm:kv_cache_usage_perc,
   vllm:request_success_total.
 - NVIDIA DCGM: DCGM_FI_DEV_GPU_UTIL, DCGM_FI_DEV_FB_USED, DCGM_FI_DEV_XID_ERRORS.
