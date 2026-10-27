@@ -26,4 +26,4 @@ dcgmExporter:
   enablePodLabels: true
   podLabelAllowlistRegex: ["^cluster$", "^tenant$", "^model$"]
   serviceMonitor:
-    enabled: false # B2 installs the Prometheus Operator CRDs
+    enabled: true # scraped by the cluster's Prometheus agent (platform/observability)

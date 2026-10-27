@@ -6,6 +6,7 @@ namespace: inference
 resources:
   - namespace.yaml
   - gpu-claims.yaml
+  - podmonitor.yaml
   - ../model-a
 labels:
   - pairs: {cluster: c2, tenant: shared} # CLAUDE.md contract: every pod carries cluster/tenant/model

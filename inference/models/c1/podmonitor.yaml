@@ -1,0 +1,17 @@
+# vLLM metrics (queue depth, KV-cache use, tokens/s, latency) for the cluster's Prometheus agent.
+# One PodMonitor per cluster, not in ../base: the base is included once per model, so a base
+# PodMonitor would select every vLLM pod several times. cluster comes from the scrape class;
+# tenant and model are copied from the pod labels (labels contract).
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: vllm
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: vllm
+  podTargetLabels: [tenant, model]
+  podMetricsEndpoints:
+    - port: http
+      path: /metrics
+      interval: 15s
