@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Kyle-Law/a-demo-runbooks/schema/runbook.schema.json",
+  "title": "a-demo runbook (v1)",
+  "description": "A reviewed remediation the a-demo executor (B15) runs for one alert signal. Steps are typed actions from a closed vocabulary, never shell; each action maps to a minimal Kubernetes permission behind required_role.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "id", "title", "matches", "required_role", "requires_approval", "preconditions", "steps", "verify", "rollback"],
+  "properties": {
+    "apiVersion": {"const": "a-demo.io/v1"},
+    "id": {"type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$", "description": "Must equal the file name, and the alert's runbook_hint that selects it."},
+    "title": {"type": "string", "minLength": 10},
+    "description": {"type": "string"},
+    "matches": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["signals"],
+      "properties": {
+        "signals": {"type": "array", "minItems": 1, "items": {"type": "string", "pattern": "^[A-Z][A-Za-z0-9]+$"}},
+        "resource": {"type": "string", "description": "Regex the ticket's resource must match, e.g. ^deployment/.+-vllm$"},
+        "clusters": {"type": "array", "items": {"enum": ["c1", "c2", "c3"]}}
+      }
+    },
+    "required_role": {"type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$", "description": "Vault role the executor requests a short-lived token for; it bounds what the steps can do."},
+    "requires_approval": {"type": "boolean"},
+    "preconditions": {"type": "array", "items": {"$ref": "#/$defs/check"}, "description": "Read-only checks; all must pass before anything runs."},
+    "steps": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/action"}},
+    "verify": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/check"}, "description": "Must all pass within their window, or the rollback runs."},
+    "rollback": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/action"}}
+  },
+  "$defs": {
+    "check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "promql", "expect"],
+      "properties": {
+        "name": {"type": "string"},
+        "promql": {"type": "string", "description": "Runs on the hub Prometheus; {{cluster}}, {{namespace}}, {{kind}}, {{name}} come from the ticket."},
+        "expect": {"enum": ["empty", "nonempty"]},
+        "within": {"type": "string", "pattern": "^[0-9]+(s|m)$", "description": "verify only: keep checking until it passes or this much time has passed."}
+      }
+    },
+    "action": {
+      "type": "object",
+      "required": ["action"],
+      "oneOf": [
+        {"additionalProperties": false, "required": ["action", "app"],
+         "properties": {"action": {"const": "argocd.resume_autosync"}, "app": {"type": "string"}}},
+        {"additionalProperties": false, "required": ["action", "app"],
+         "properties": {"action": {"const": "argocd.sync"}, "app": {"type": "string"}}},
+        {"additionalProperties": false, "required": ["action", "namespace", "name"],
+         "properties": {"action": {"const": "k8s.delete_unowned_pod"}, "namespace": {"type": "string"}, "name": {"type": "string"}}},
+        {"additionalProperties": false, "required": ["action", "namespace", "label_selector"],
+         "properties": {"action": {"const": "k8s.delete_jobs"}, "namespace": {"type": "string"}, "label_selector": {"type": "string", "minLength": 3}}},
+        {"additionalProperties": false, "required": ["action", "namespace", "deployment"],
+         "properties": {"action": {"const": "k8s.rollout_restart"}, "namespace": {"type": "string"}, "deployment": {"type": "string"}}},
+        {"additionalProperties": false, "required": ["action", "message"],
+         "properties": {"action": {"const": "notify"}, "message": {"type": "string"}}}
+      ]
+    }
+  }
+}

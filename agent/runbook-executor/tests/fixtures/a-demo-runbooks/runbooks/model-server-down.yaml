@@ -1,0 +1,33 @@
+apiVersion: a-demo.io/v1
+id: model-server-down
+title: Restore a crash-looping model server from Git
+description: |
+  A model server Deployment drifted from Git (for example an invalid vLLM flag applied by hand while
+  Argo CD auto-sync was paused) and its pods crash-loop. Git is the source of truth: resume Argo CD's
+  auto-sync for the cluster's models and sync, which restores the Deployment as committed.
+matches:
+  signals: [ModelServerDown]
+  resource: "^deployment/.+-vllm$"
+required_role: gitops-operator
+requires_approval: true
+preconditions:
+  - name: replicas are still missing
+    promql: >-
+      kube_deployment_spec_replicas{cluster="{{cluster}}", namespace="{{namespace}}", deployment="{{name}}"}
+      - kube_deployment_status_replicas_available{cluster="{{cluster}}", namespace="{{namespace}}", deployment="{{name}}"} > 0
+    expect: nonempty
+steps:
+  - action: argocd.resume_autosync
+    app: "models-{{cluster}}"
+  - action: argocd.sync
+    app: "models-{{cluster}}"
+verify:
+  - name: every replica is available
+    promql: >-
+      kube_deployment_spec_replicas{cluster="{{cluster}}", namespace="{{namespace}}", deployment="{{name}}"}
+      - kube_deployment_status_replicas_available{cluster="{{cluster}}", namespace="{{namespace}}", deployment="{{name}}"} > 0
+    expect: empty
+    within: 15m
+rollback:
+  - action: notify
+    message: "Sync from Git did not restore {{name}}; Git itself may be wrong. Check the last commits to inference/models and the pod logs."

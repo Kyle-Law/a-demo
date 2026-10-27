@@ -1,0 +1,28 @@
+apiVersion: a-demo.io/v1
+id: inference-queue-backlog
+title: Shed batch load when a model's request queue backs up
+description: |
+  Interactive inference is queuing because batch work (Jobs labelled load-class=batch) floods the same
+  model. Delete the batch Jobs in the namespace; interactive clients keep their capacity, and batch
+  owners can resubmit later. Replicas can't simply be added: each model is bound to its GPU or MIG slice.
+matches:
+  signals: [InferenceQueueBacklog]
+  resource: "^deployment/.+-vllm$"
+required_role: inference-job-janitor
+requires_approval: true
+preconditions:
+  - name: requests are still waiting
+    promql: sum by (cluster, namespace, model) (vllm:num_requests_waiting{cluster="{{cluster}}", namespace="{{namespace}}"}) > 5
+    expect: nonempty
+steps:
+  - action: k8s.delete_jobs
+    namespace: "{{namespace}}"
+    label_selector: load-class=batch
+verify:
+  - name: the queue drains
+    promql: sum by (cluster, namespace, model) (vllm:num_requests_waiting{cluster="{{cluster}}", namespace="{{namespace}}"}) > 5
+    expect: empty
+    within: 10m
+rollback:
+  - action: notify
+    message: "The queue did not drain after the batch Jobs were removed; the load isn't batch. Check request rate per client and the EPP's spread across replicas."
