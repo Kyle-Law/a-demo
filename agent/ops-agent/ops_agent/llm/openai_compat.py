@@ -9,7 +9,7 @@ import logging
 
 import openai
 
-from . import BadAnswer, Dispatch, LoopResult, ProviderUnavailable, ToolSpec
+from . import BadAnswer, Dispatch, LoopResult, ProviderUnavailable, ToolSpec, finish_problems
 
 log = logging.getLogger("ops-agent.llm.openai")
 
@@ -66,9 +66,13 @@ class OpenAICompatProvider:
                     args = {}
                 else:
                     if call.function.name == finish_tool:
-                        result.final_args = args
-                        return result
-                    output, is_error = dispatch(call.function.name, args)
+                        rejected = finish_problems(tools, finish_tool, args)
+                        if not rejected:
+                            result.final_args = args
+                            return result
+                        output, is_error = rejected, True
+                    else:
+                        output, is_error = dispatch(call.function.name, args)
                 result.tool_log.append({"tool": call.function.name, "args": args,
                                         "is_error": is_error, "chars": len(output)})
                 messages.append({"role": "tool", "tool_call_id": call.id, "content": output})

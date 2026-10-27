@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 DEFAULT_LLM_CHAIN = ",".join([
     "openai|intellect-3|http://inference-gateway.inference.svc/v1",  # MI300X (c1)
     "openai|model-a|http://inference-gateway.inference.svc/v1",      # A100 MIG / A6000 (c1, c2)
-    "anthropic|claude-opus-5-5",                                     # external, survives our GPUs failing
+    "anthropic|claude-haiku-5-5",                                    # external, survives our GPUs failing
 ])
 
 

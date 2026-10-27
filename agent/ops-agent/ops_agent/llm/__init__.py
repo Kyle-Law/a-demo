@@ -37,6 +37,45 @@ class LoopResult:
     turns: int = 0
 
 
+def schema_problems(schema: dict, value, path: str = "") -> list[str]:
+    """Check value against the small JSON-schema subset our tools use (object/array/string/integer,
+    required, enum, additionalProperties: false). vLLM doesn't enforce tool schemas the way Claude's
+    strict mode does: intellect-3 wrote evidence items with "arguments" instead of "query"."""
+    where = path or "arguments"
+    kind = schema.get("type")
+    if kind == "object":
+        if not isinstance(value, dict):
+            return [f"{where} must be an object"]
+        problems = [f"{where}.{k} is required" for k in schema.get("required", []) if k not in value]
+        props = schema.get("properties", {})
+        if schema.get("additionalProperties") is False:
+            problems += [f"{where}.{k} is not allowed (allowed: {', '.join(props)})" for k in value if k not in props]
+        for k, sub_schema in props.items():
+            if k in value:
+                problems += schema_problems(sub_schema, value[k], f"{where}.{k}")
+        return problems
+    if kind == "array":
+        if not isinstance(value, list):
+            return [f"{where} must be an array"]
+        return [p for i, item in enumerate(value) for p in schema_problems(schema.get("items", {}), item, f"{where}[{i}]")]
+    if kind == "string" and not isinstance(value, str):
+        return [f"{where} must be a string"]
+    if kind == "integer" and (not isinstance(value, int) or isinstance(value, bool)):
+        return [f"{where} must be an integer"]
+    if "enum" in schema and value not in schema["enum"]:
+        return [f"{where} must be one of {schema['enum']}"]
+    return []
+
+
+def finish_problems(tools: list[ToolSpec], finish_tool: str, args: dict) -> str:
+    """"" if the finishing call is valid, else a message telling the model what to fix."""
+    schema = next(t["input_schema"] for t in tools if t["name"] == finish_tool)
+    problems = schema_problems(schema, args)
+    if not problems:
+        return ""
+    return f"Error: {finish_tool} was not accepted. Fix these and call it again: " + "; ".join(problems[:10])
+
+
 class Provider(Protocol):
     name: str
 

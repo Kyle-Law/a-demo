@@ -7,7 +7,7 @@ from ops_agent.config import DEFAULT_LLM_CHAIN, parse_chain
 
 def test_default_chain_order():
     assert [(e.kind, e.model) for e in parse_chain(DEFAULT_LLM_CHAIN)] == [
-        ("openai", "intellect-3"), ("openai", "model-a"), ("anthropic", "claude-opus-5-5")]
+        ("openai", "intellect-3"), ("openai", "model-a"), ("anthropic", "claude-haiku-5-5")]
 
 
 def test_labels_tell_the_same_model_apart():

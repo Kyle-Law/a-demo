@@ -7,11 +7,16 @@ import logging
 
 import anthropic
 
-from . import BadAnswer, Dispatch, LoopResult, ProviderUnavailable, ToolSpec
+from . import BadAnswer, Dispatch, LoopResult, ProviderUnavailable, ToolSpec, finish_problems
 
 log = logging.getLogger("ops-agent.llm.anthropic")
 
-DEFAULT_MODEL = "claude-opus-5-5"
+# Haiku for the demo: the fallback runs rarely, and Haiku 5.5 is cheap and fast. Set
+# anthropic|claude-opus-5-5 in AGENT_LLM_CHAIN for the most capable model.
+DEFAULT_MODEL = "claude-haiku-5-5"
+# Models that accept the server-side refusal fallback (fallbacks="default"); Claude Haiku 5.5 has
+# no server-side fallback, so a refusal there just moves the chain on.
+SERVER_FALLBACK_MODELS = {"claude-opus-5-5", "claude-opus-5", "claude-fable-5-1", "claude-sonnet-5-5"}
 
 
 class AnthropicProvider:
@@ -19,7 +24,7 @@ class AnthropicProvider:
                  client: anthropic.Anthropic | None = None):
         self.name = f"anthropic:{model}"
         self.model = model
-        # Root-cause analysis is intelligence-sensitive; Claude Opus 5.5 defaults to "medium".
+        # Root-cause analysis is intelligence-sensitive; Haiku 5.5 and Opus 5.5 default to "medium".
         self.effort = effort
         self.max_tokens = max_tokens
         self.client = client or anthropic.Anthropic()  # ANTHROPIC_API_KEY from the environment
@@ -34,18 +39,15 @@ class AnthropicProvider:
         nudged = False
         for turn in range(1, max_turns + 1):
             result.turns = turn
+            request = dict(model=self.model, max_tokens=self.max_tokens, system=system, tools=claude_tools,
+                           messages=messages, output_config={"effort": self.effort})
             try:
-                resp = self.client.beta.messages.create(
-                    model=self.model,
-                    max_tokens=self.max_tokens,
-                    system=system,
-                    tools=claude_tools,
-                    messages=messages,
-                    output_config={"effort": self.effort},
+                if self.model in SERVER_FALLBACK_MODELS:
                     # On a safety decline, re-run on a fallback model chosen by category.
-                    betas=["server-side-fallback-2026-07-01"],
-                    fallbacks="default",
-                )
+                    resp = self.client.beta.messages.create(
+                        **request, betas=["server-side-fallback-2026-07-01"], fallbacks="default")
+                else:
+                    resp = self.client.messages.create(**request)
             except (anthropic.APIConnectionError, anthropic.RateLimitError) as exc:
                 raise ProviderUnavailable(f"{type(exc).__name__}: {exc}") from exc
             except anthropic.AuthenticationError as exc:
@@ -74,9 +76,13 @@ class AnthropicProvider:
             results = []
             for block in tool_uses:
                 if block.name == finish_tool:
-                    result.final_args = dict(block.input)
-                    return result
-                output, is_error = dispatch(block.name, dict(block.input))
+                    rejected = finish_problems(tools, finish_tool, dict(block.input))
+                    if not rejected:
+                        result.final_args = dict(block.input)
+                        return result
+                    output, is_error = rejected, True
+                else:
+                    output, is_error = dispatch(block.name, dict(block.input))
                 result.tool_log.append({"tool": block.name, "args": dict(block.input),
                                         "is_error": is_error, "chars": len(output)})
                 results.append({"type": "tool_result", "tool_use_id": block.id,

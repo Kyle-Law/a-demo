@@ -23,14 +23,24 @@ or when the model never makes the finishing `submit_diagnosis` call:
 1. **intellect-3** on the MI300X (C1), OpenAI-compatible through the inference gateway
 2. **model-a** (Qwen3-4B) on the A100 MIG slices / A6000 (C1, C2), same API; tool calling is on
    (`--tool-call-parser=hermes`)
-3. **Claude** (`claude-opus-5-5`) through the Anthropic API, so diagnosis still works when the GPU clusters
-   are what's broken (CLAUDE.md: the agent must not depend solely on infrastructure it heals)
+3. **Claude** through the Anthropic API, so diagnosis still works when the GPU clusters are what's broken
+   (CLAUDE.md: the agent must not depend solely on infrastructure it heals). **Claude Haiku 5.5**
+   (`claude-haiku-5-5`) by default for the demo: cheap and fast for a rarely used fallback. Use
+   `anthropic|claude-opus-5-5` in `AGENT_LLM_CHAIN` for the most capable model.
 
 Each provider owns its tool loop (`ops_agent/llm/openai_compat.py`, `ops_agent/llm/anthropic_fallback.py`;
-one SDK per file). The Claude one uses effort `high` (RCA is intelligence-sensitive; Opus 5.5 defaults to
-`medium`), `strict` tool schemas (forced `tool_choice` is a 400 on this model, so the prompt asks for the
-finishing call), passes thinking blocks back unchanged, and opts into **server-side refusal fallbacks**
-(`fallbacks="default"`), so a safety decline is re-run on a fallback model instead of failing the RCA.
+one SDK per file). The Claude one uses effort `high` (RCA is intelligence-sensitive; Haiku 5.5 and Opus 5.5
+default to `medium`), `strict` tool schemas and `tool_choice` auto (the prompt asks for the finishing call),
+and passes thinking blocks back unchanged. On models that support it (Opus 5.5 and others, not Haiku 5.5)
+it opts into **server-side refusal fallbacks** (`fallbacks="default"`); on Haiku a refusal moves the chain on.
+
+**The finishing call is validated** against its schema by both providers: vLLM doesn't enforce tool schemas,
+and intellect-3 once wrote evidence with `arguments` instead of `query`. A bad call goes back to the model
+as a tool error listing what to fix.
+
+**Tried on the MI300X (2026-10-27)**, real loop and prompt, scripted tool outputs: the crash-loop fault was
+diagnosed correctly in 22 s (2 tool calls); the DRA fault (`gpu-claim-pending`) in 43 s, following
+pod → describe → ResourceClaims → ResourceSlices.
 
 If every provider fails, the agent comments once and labels the ticket `ai-triage-failed` instead of
 retrying forever.
@@ -56,7 +66,7 @@ python3 -m venv .venv && .venv/bin/pip install pytest pyyaml -r agent/ops-agent/
 cd agent/ops-agent && ../../.venv/bin/pytest
 ```
 
-25 tests, offline: both providers drive their **real SDK** against a local fake server (request shape, tool
+33 tests, offline: both providers drive their **real SDK** against a local fake server (request shape, tool
 round-trip, fallback triggers); the chain's order; the kubectl guard; the triage loop on a ticket written by
 the real `agent/alert-bridge` code (triage once, fail once, skip non-bridge tickets); prompt vocabulary.
 
@@ -79,7 +89,7 @@ cd agent/ops-agent && python -m ops_agent diagnose SUP-12
 | Deployment, `AGENT_LLM_CHAIN` | `deploy/`, synced by `clusters/c3/ops-agent.yaml` |
 | C1/C2 gateways reachable from C3 | NodePort 30080 over the WireGuard mesh (`inference/gateways/base/mesh-nodeport.yaml`), until B9 |
 
-The chain on C3: `intellect-3-c1` → `model-a-c1` → `model-a-c2` → `anthropic:claude-opus-5-5`. Losing C1 falls
+The chain on C3: `intellect-3-c1` → `model-a-c1` → `model-a-c2` → `anthropic:claude-haiku-5-5`. Losing C1 falls
 through to C2's model A; losing both reaches Claude. A gone endpoint fails over within ~5 s (connect
 timeout); a reasoning model still gets minutes to answer.
 
