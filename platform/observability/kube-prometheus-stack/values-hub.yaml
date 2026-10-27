@@ -1,6 +1,6 @@
 # The hub on C3: full Prometheus that also receives the agents' remote-write, Alertmanager (B13
-# sends alerts to Jira), and Grafana. Storage is emptyDir for now, so metrics are lost when the
-# Prometheus pod restarts. A StorageClass comes with Vault in B15.
+# sends alerts to Jira), and Grafana. Prometheus keeps its TSDB on a local-path volume (C3's
+# default StorageClass, B15), so metrics survive a pod restart; the volume pins it to one node.
 
 prometheus:
   service:
@@ -12,6 +12,15 @@ prometheus:
   prometheusSpec:
     enableRemoteWriteReceiver: true
     retention: 7d
+    retentionSize: 25GB # below the volume size, so the TSDB never fills it
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: local-path
+          accessModes: [ReadWriteOnce]
+          resources:
+            requests:
+              storage: 30Gi
 
 defaultRules:
   # Every series carries cluster, so evaluate the default alert rules per cluster instead of
