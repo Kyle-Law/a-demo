@@ -22,6 +22,15 @@
     - jira_credentials # B13: the alert bridge's Jira Secret, from the git-ignored .jira.env
     - ops_agent_secrets # B14: the agent's read-only kubeconfigs and optional Anthropic key
 
+# B15: the identity Vault's Kubernetes secrets engine uses on each cluster (tagged vault, so
+# --tags vault also refreshes the engines).
+- name: Vault's token minter on every cluster
+  hosts: control_plane
+  become: true
+  roles:
+    - role: vault_minter
+      tags: [vault]
+
 # B15: Vault starts sealed. Waits for Argo CD to start it, initializes it once (keys to the
 # git-ignored .vault-init.json on the controller) and unseals every replica. After a Vault pod
 # restarts: ansible-playbook gitops.yml --tags vault
@@ -30,4 +39,6 @@
   become: true
   roles:
     - role: vault_unseal
+      tags: [vault]
+    - role: vault_config # Kubernetes auth, executor policy, secrets engines (platform/vault/runbook-roles.yaml)
       tags: [vault]

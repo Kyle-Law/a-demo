@@ -1,0 +1,5 @@
+vault_runbook_roles_file: "{{ repo_root }}/platform/vault/runbook-roles.yaml"
+# Generated ServiceAccounts are named runbook-<role>-<random>; platform/runbook-roles/runbook-guard.yaml
+# matches on that prefix. Go template for Vault, so Ansible must not render it.
+vault_sa_name_template: !unsafe '{{ printf "runbook-%s-%s" (.RoleName | truncate 24) (random 8) | lowercase }}'
+vault_namespace: vault

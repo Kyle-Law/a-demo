@@ -1,0 +1,30 @@
+# B15: the runbook ClusterRoles Vault binds to its short-lived ServiceAccounts, and the admission
+# policy that narrows the gitops-operator role (platform/runbook-roles), on every cluster.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: runbook-roles
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - clusters:
+        selector:
+          matchLabels:
+            a-demo.io/fleet: "true"
+  template:
+    metadata:
+      name: "runbook-roles-{{ .name }}"
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/Kyle-Law/a-demo.git
+        targetRevision: main
+        path: platform/runbook-roles
+      destination:
+        name: "{{ .name }}"
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true

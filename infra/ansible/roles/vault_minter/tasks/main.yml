@@ -1,0 +1,38 @@
+# B15: Vault's token-minting identity on this cluster. The hub play hands the token to Vault's
+# Kubernetes secrets engine for this cluster (roles/vault_config).
+- name: Create the vault-minter ServiceAccount, ClusterRole and token
+  ansible.builtin.command: kubectl --context {{ kube_context }} apply -f -
+  args:
+    stdin: "{{ lookup('ansible.builtin.file', 'vault-minter.yaml') }}"
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: vault_minter_apply
+  changed_when: "' created' in vault_minter_apply.stdout or ' configured' in vault_minter_apply.stdout"
+
+- name: Wait for the token controller to fill in the token
+  ansible.builtin.command: >-
+    kubectl --context {{ kube_context }} -n kube-system
+    get secret vault-minter-token -o jsonpath={.data.token}
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: vault_minter_token
+  until: vault_minter_token.stdout | length > 0
+  retries: 10
+  delay: 3
+  changed_when: false
+  no_log: true
+
+- name: Read the cluster CA
+  ansible.builtin.command: >-
+    kubectl --context {{ kube_context }} config view --raw --minify
+    -o jsonpath={.clusters[0].cluster.certificate-authority-data}
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: vault_minter_ca
+  changed_when: false
+
+- name: Hand token and CA to the hub play
+  ansible.builtin.set_fact:
+    vault_minter_token: "{{ vault_minter_token.stdout | b64decode }}"
+    vault_minter_ca: "{{ vault_minter_ca.stdout | b64decode }}"
+  no_log: true
