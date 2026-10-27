@@ -1,0 +1,84 @@
+# B13: the alerts that open Jira tickets (ticket="true"). Evaluated on the hub Prometheus (C3)
+# over every cluster's data, so each expression keeps the cluster label. Each rule sets the
+# alert -> ticket contract (CLAUDE.md): cluster and namespace from the series, resource built
+# with label_replace, signal and severity as labels, runbook_hint as an annotation (the runbook
+# id B15 will look up). One rule per fault in chaos/; agent/alert-bridge/tests checks the contract.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: a-demo-ticket-rules
+spec:
+  groups:
+    - name: a-demo.inference
+      rules:
+        - alert: ModelServerDown
+          # A vLLM Deployment has fewer ready replicas than it should (crash loop, failed load,
+          # lost GPU). chaos/model-server-crashloop.sh
+          expr: |
+            label_replace(
+              kube_deployment_spec_replicas{namespace="inference", deployment=~".+-vllm"}
+                - kube_deployment_status_replicas_available{namespace="inference", deployment=~".+-vllm"} > 0,
+              "resource", "deployment/$1", "deployment", "(.+)")
+          for: 2m
+          labels:
+            ticket: "true"
+            signal: ModelServerDown
+            severity: critical
+          annotations:
+            summary: "{{ $labels.cluster }}/inference/{{ $labels.deployment }}: {{ $value }} replica(s) not available"
+            description: "Fewer vLLM replicas are available than the Deployment wants, for 2 minutes. Check pod restarts, container logs and the GPU claim."
+            runbook_hint: model-server-down
+        - alert: InferenceQueueBacklog
+          # Requests waiting for a slot on one model, summed over its replicas: demand is above
+          # what the replicas (KV cache, max sequences) can take. chaos/inference-queue-backlog.sh
+          expr: |
+            label_replace(
+              sum by (cluster, namespace, model) (vllm:num_requests_waiting{namespace="inference"}) > 5,
+              "resource", "deployment/$1-vllm", "model", "(.+)")
+          for: 2m
+          labels:
+            ticket: "true"
+            signal: InferenceQueueBacklog
+            severity: warning
+          annotations:
+            summary: "{{ $labels.cluster }}/inference/{{ $labels.model }}: {{ $value }} requests waiting"
+            description: "More than 5 requests have been queued on this model for 2 minutes. Check KV-cache usage, the EPP's spread across replicas and the request rate."
+            runbook_hint: inference-queue-backlog
+    - name: a-demo.scheduling
+      rules:
+        - alert: PodUnschedulable
+          # A workload in a GPU namespace can't be scheduled, typically because no device
+          # satisfies its ResourceClaim (no free MIG slice of that profile). chaos/gpu-claim-pending.sh
+          expr: |
+            label_replace(
+              kube_pod_status_unschedulable{namespace=~"inference|gpu-smoke|tenant-.+"} == 1,
+              "resource", "pod/$1", "pod", "(.+)")
+          for: 3m
+          labels:
+            ticket: "true"
+            signal: PodUnschedulable
+            severity: warning
+          annotations:
+            summary: "{{ $labels.cluster }}/{{ $labels.namespace }}/{{ $labels.pod }} is unschedulable"
+            description: "The pod has been unschedulable for 3 minutes. Compare its ResourceClaims with the cluster's ResourceSlices (kubectl get resourceclaims,resourceslices)."
+            runbook_hint: pod-unschedulable
+    - name: a-demo.nodes
+      rules:
+        - alert: NodeNotReady
+          # Node-level fault (kubelet stopped, node lost). Nodes are cluster-scoped, so namespace
+          # is the fixed value "cluster-scoped". chaos/node-not-ready.sh
+          expr: |
+            label_replace(
+              label_replace(
+                kube_node_status_condition{condition="Ready", status="true"} == 0,
+                "resource", "node/$1", "node", "(.+)"),
+              "namespace", "cluster-scoped", "", "")
+          for: 2m
+          labels:
+            ticket: "true"
+            signal: NodeNotReady
+            severity: critical
+          annotations:
+            summary: "{{ $labels.cluster }}/{{ $labels.node }} is NotReady"
+            description: "The node has not been Ready for 2 minutes. Its pods' alerts in this cluster are inhibited: this ticket is the root cause."
+            runbook_hint: node-not-ready

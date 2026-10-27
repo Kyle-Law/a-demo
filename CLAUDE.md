@@ -95,7 +95,7 @@ Track status here. Each block must meet its "done when" before it's marked done.
 | B10 | Soft multi-tenancy on C1 | B8 | Tenant B blocked from disallowed profile; lower priority under load | todo |
 | B11 | Slinky (operator, slurmdbd, GRES, Pyxis/Enroot, DCGM prolog) | B3 | Containerized GPU job runs; failed diag drains node | todo |
 | B12 | Train-to-serve loop (LoRA → MinIO → dynamic adapter) | B9, B11 | One command: sbatch → new adapter answering | todo |
-| B13 | Incident intake (Alertmanager → Jira) + chaos scripts | B2 | Each fault yields exactly one ticket | in progress (bridge + Alertmanager routing written, not yet run; alert rules + chaos scripts next) |
+| B13 | Incident intake (Alertmanager → Jira) + chaos scripts | B2 | Each fault yields exactly one ticket | in progress (bridge, routing, 4 ticket rules + chaos scripts written; not yet run) |
 | B14 | Read-only agent (triage + RCA) | B13 | Correct RCA with evidence on every scripted fault | todo |
 | B15 | Runbook repo + executor (Vault short-lived tokens, approval gate) | B14 | Merged runbook fixes a fault; ticket auto-closes | todo |
 | B16 | Runbook authoring (agent opens PRs) | B15 | Agent PR passes CI; executable after merge | todo |
@@ -116,7 +116,7 @@ Build order: vertical slice on C2 first (B0, B3, B7, B8, B2, B13, B14), then C1 
 - Pin every Helm chart and image version; no `latest`.
 - Secrets: never commit. Use TODO (SOPS / External Secrets) — confirm before adding anything secret-shaped.
 - Python for the agent and tooling (TODO: confirm version, package manager); Bash for chaos scripts with `set -euo pipefail`.
-- Every chaos script has a matching `--revert`.
+- Every chaos script has a matching `--revert`. A chaos script that changes an Argo CD-managed object must pause that Application's auto-sync first (self-heal undoes it in seconds); `--revert` resumes it.
 - Commit messages: `<block-id>: <summary>`, e.g. `B8: add InferencePool for model-a`.
 
 ## Rules for Claude Code
