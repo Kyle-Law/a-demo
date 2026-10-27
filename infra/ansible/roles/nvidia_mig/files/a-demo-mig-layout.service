@@ -1,0 +1,12 @@
+[Unit]
+Description=Create the static MIG layout for the NVIDIA DRA driver
+After=nvidia-persistenced.service
+Before=kubelet.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/a-demo-mig-layout
+
+[Install]
+WantedBy=multi-user.target
