@@ -32,7 +32,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: agent
-          image: ghcr.io/kyle-law/a-demo-ops-agent:0.1.0 # built by .github/workflows/ci.yml
+          image: ghcr.io/kyle-law/a-demo-ops-agent:0.2.0 # built by .github/workflows/ci.yml when this version lands on main
           args: ["run"]
           env:
             # intellect-3 (MI300X, C1) -> model-a on C1 -> model-a on C2 -> Claude. The C1/C2
