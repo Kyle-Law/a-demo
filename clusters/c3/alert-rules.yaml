@@ -1,0 +1,21 @@
+# B13: alert rules that open tickets, evaluated on the hub Prometheus (platform/observability/rules).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: alert-rules
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Kyle-Law/a-demo.git
+    targetRevision: main
+    path: platform/observability/rules
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - SkipDryRunOnMissingResource=true # PrometheusRule CRD comes with kube-prometheus-stack-c3

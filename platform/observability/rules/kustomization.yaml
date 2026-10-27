@@ -1,0 +1,6 @@
+# B13 alert rules on the hub (C3). Synced by clusters/c3/alert-rules.yaml.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: monitoring
+resources:
+  - ticket-rules.yaml

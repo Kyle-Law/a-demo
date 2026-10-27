@@ -72,3 +72,9 @@ alertmanager:
         target_matchers: ['severity = info']
         equal: [cluster, namespace]
       - target_matchers: ['alertname = InfoInhibitor']
+      # B13 "one fault, one ticket": a NotReady node also takes its pods down, which would open
+      # ModelServerDown / PodUnschedulable tickets for the same fault. The node ticket is the
+      # root cause, so it silences those for the whole cluster while it fires.
+      - source_matchers: ['signal = NodeNotReady']
+        target_matchers: ['signal =~ "ModelServerDown|PodUnschedulable"']
+        equal: [cluster]
