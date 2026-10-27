@@ -1,0 +1,51 @@
+# B2: Prometheus in agent mode on the GPU clusters, remote-writing to the hub on C3
+# (clusters/c3/observability.yaml). C3 runs the full Prometheus instead.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: observability-agents
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - list:
+        elements:
+          - cluster: c1
+          - cluster: c2
+  template:
+    metadata:
+      name: "kube-prometheus-stack-{{ .cluster }}"
+    spec:
+      project: default
+      sources:
+        - repoURL: https://prometheus-community.github.io/helm-charts
+          chart: kube-prometheus-stack
+          targetRevision: 92.14.0 # keep equal to clusters/c3/observability.yaml
+          helm:
+            releaseName: kps
+            valueFiles:
+              - $values/platform/observability/kube-prometheus-stack/values.yaml
+              - $values/platform/observability/kube-prometheus-stack/values-agent.yaml
+            valuesObject:
+              prometheus:
+                prometheusSpec:
+                  scrapeClasses:
+                    - name: cluster
+                      default: true
+                      relabelings:
+                        - targetLabel: cluster
+                          replacement: "{{ .cluster }}"
+        - repoURL: https://github.com/Kyle-Law/a-demo.git
+          targetRevision: main
+          ref: values
+      destination:
+        name: "{{ .cluster }}"
+        namespace: monitoring
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true # Prometheus Operator CRDs exceed client-side apply's annotation limit

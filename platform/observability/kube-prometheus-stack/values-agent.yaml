@@ -1,0 +1,16 @@
+# The senders on C1/C2: Prometheus in agent mode scrapes this cluster (nodes, kubelet, kube-state-
+# metrics, every ServiceMonitor/PodMonitor: dcgm-exporter, vLLM) and remote-writes everything to the
+# hub on C3 over the WireGuard mesh. No local storage, queries, rules, Alertmanager or Grafana: the
+# hub evaluates the alert rules over all clusters at once.
+prometheus:
+  agentMode: true
+  prometheusSpec:
+    remoteWrite:
+      - url: http://172.30.3.10:30090/api/v1/write # c3-cp wg IP; NodePort from values-hub.yaml
+
+alertmanager:
+  enabled: false
+grafana:
+  enabled: false
+defaultRules:
+  create: false

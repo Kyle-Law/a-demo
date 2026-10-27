@@ -6,6 +6,7 @@ namespace: inference
 resources:
   - namespace.yaml
   - gpu-claims.yaml
+  - podmonitor.yaml
   - ../model-a
   - ../model-b
   - ../embed

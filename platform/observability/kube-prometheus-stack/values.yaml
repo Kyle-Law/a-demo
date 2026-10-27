@@ -1,6 +1,19 @@
 # kube-prometheus-stack 92.14.0, shared by the hub (C3, values-hub.yaml) and the agents
 # (C1/C2, values-agent.yaml). See platform/observability/README.md for the push design.
 
+# Nothing to scrape: Cilium replaces kube-proxy, and kubeadm binds etcd, the scheduler and the
+# controller-manager to localhost. Left on, each would be a permanently "down" target with alerts
+# (KubeProxyDown, KubeSchedulerDown, ...) that fire forever and mislead B13/B14. Turning them off
+# also removes those alert rules.
+kubeProxy:
+  enabled: false
+kubeEtcd:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeControllerManager:
+  enabled: false
+
 prometheus:
   prometheusSpec:
     # Scrape every ServiceMonitor / PodMonitor / rule in the cluster (dcgm-exporter, vLLM, EPP, ...),

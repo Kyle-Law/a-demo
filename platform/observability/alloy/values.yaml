@@ -1,0 +1,56 @@
+# Grafana Alloy 1.14.3 (app v1.21.2) on every cluster: tails the logs of the pods on its node
+# through the Kubernetes API and pushes them to Loki on C3 over the WireGuard mesh. CLUSTER is set
+# per cluster by clusters/all/alloy.yaml; HOSTNAME is the node name (set by the chart).
+alloy:
+  configMap:
+    content: |
+      discovery.kubernetes "pods" {
+        role = "pod"
+        selectors {
+          role  = "pod"
+          field = "spec.nodeName=" + sys.env("HOSTNAME")
+        }
+      }
+
+      // Labels contract: cluster (from loki.write), tenant and model (from pod labels).
+      discovery.relabel "pods" {
+        targets = discovery.kubernetes.pods.targets
+        rule {
+          source_labels = ["__meta_kubernetes_namespace"]
+          target_label  = "namespace"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_name"]
+          target_label  = "pod"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_container_name"]
+          target_label  = "container"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_node_name"]
+          target_label  = "node"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_label_tenant"]
+          target_label  = "tenant"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_label_model"]
+          target_label  = "model"
+        }
+      }
+
+      loki.source.kubernetes "pods" {
+        targets    = discovery.relabel.pods.output
+        forward_to = [loki.write.hub.receiver]
+      }
+
+      loki.write "hub" {
+        endpoint {
+          url = "http://172.30.3.10:31100/loki/api/v1/push" // c3-cp wg IP; NodePort from platform/observability/hub
+        }
+        external_labels = {
+          cluster = sys.env("CLUSTER"),
+        }
+      }
