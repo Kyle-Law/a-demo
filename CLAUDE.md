@@ -29,7 +29,11 @@ Hosts are provisioned by hand (MI300X: HotAisle; CPU/A100/A6000: Prime Intellect
 - A100 MIG profiles `14,14,14,15` = 3x `2g.20gb` + 1x `1g.20gb`, allocated through DRA (`mig.nvidia.com` DeviceClass, CEL on `profile`; see decision 10).
   - 2x `2g.20gb`: model A replicas (same model, two pods; never tensor-parallel across MIG slices — not possible)
   - 1x `2g.20gb`: model B
-  - 1x `1g.20gb`: embedding + reranker (agent retrieval over runbooks/tickets)
+  - 1x `1g.20gb`: embedding + reranker (agent retrieval over runbooks/tickets), both pods reference one shared
+    ResourceClaim (`inference/models/c1/gpu-claims.yaml`); each caps itself at 40% of the slice's memory
+- Models (`inference/models/`): A = Qwen3-4B-Instruct-2507, B = Qwen3.5-2B (vision), embed/rerank =
+  Qwen3-Embedding-0.6B / Qwen3-Reranker-0.6B, MI300X = INTELLECT-3-FP8. Served under stable names
+  (`model-a`, `model-b`, `embed`, `rerank`, `intellect-3`).
 - Measured 2026-10-27 (Massed Compute A100 80GB PCIe, driver 580): each slice has **19.5 GiB** usable,
   not 20. BF16 GEMM: 2g.20gb ≈ 77 TFLOPS alone, ≈ 61 with all four slices busy (the 300 W board
   power is shared, so MIG isolates memory and SMs but not throughput); 1g.20gb ≈ 33.
@@ -54,7 +58,7 @@ Hosts are provisioned by hand (MI300X: HotAisle; CPU/A100/A6000: Prime Intellect
 7. **Agent-authored runbooks are never executable until a human merges the PR.**
 8. **Runbooks live in a separate repo** so the agent's GitHub token is scoped to that repo only.
 9. **Host WireGuard mesh under everything.** All nodes of all clusters share `wg0` (`172.30.0.0/16`); the wg IP is the node IP. Cilium uses VXLAN over `wg0` with Cilium encryption off. Needed because C1 spans two providers and public IPs may be NATed. Pod CIDRs (`10.{1,2,3}.0.0/16`) and Cilium cluster IDs (1–3) must stay unique for Cluster Mesh.
-10. **GPUs are allocated with DRA wherever supported**, not the device plugin. NVIDIA: GPU Operator in `GPUCluster` (DRA) mode with the host's pre-installed driver; workloads use ResourceClaims against `gpu.nvidia.com` / `mig.nvidia.com`, never `nvidia.com/gpu` or `nvidia.com/mig-*` limits. Pods that share a device (embed + rerank on the 1g slice; vLLM + Slurm on the A6000) reference one shared ResourceClaim. MIG is static (host unit); DynamicMIG is alpha and a later demo only. `GPUCluster` cannot coexist with or migrate in place from `ClusterPolicy`, so flipping back means reinstalling the GPU stack. Use the device plugin only where a component can't consume DRA (check Slinky in B11, the AMD DRA driver on MI300X in B4).
+10. **GPUs are allocated with DRA wherever supported**, not the device plugin. NVIDIA: GPU Operator in `GPUCluster` (DRA) mode with the host's pre-installed driver; workloads use ResourceClaims against `gpu.nvidia.com` / `mig.nvidia.com`, never `nvidia.com/gpu` or `nvidia.com/mig-*` limits. Pods that share a device (embed + rerank on the 1g slice; vLLM + Slurm on the A6000) reference one shared ResourceClaim; claims are namespaced, so sharers must live in one namespace. MIG is static (host unit); DynamicMIG is alpha and a later demo only. `GPUCluster` cannot coexist with or migrate in place from `ClusterPolicy`, so flipping back means reinstalling the GPU stack. Use the device plugin only where a component can't consume DRA (check Slinky in B11, the AMD DRA driver on MI300X in B4).
 
 ## Repository layout
 
@@ -85,7 +89,7 @@ Track status here. Each block must meet its "done when" before it's marked done.
 | B4 | AMD stack (AMD DRA driver if it supports MI300X, else AMD GPU Operator; exporter) | B1 | MI300X allocatable (ResourceSlice, or `amd.com/gpu` as fallback); ROCm smoke pod runs | todo |
 | B5 | Cluster Mesh + Hubble Relay | B0 | Echo global service fails over C1→C2, visible in Hubble | todo |
 | B6 | Egress gateways + default-deny + FQDN allowlist | B5 | Agent ns reaches only Jira/GitHub/LLM API | todo |
-| B7 | Model serving (vLLM CUDA/ROCm, model cache, registry mirror) | B3, B4 | Each model answers on its pod IP | todo |
+| B7 | Model serving (vLLM CUDA/ROCm, model cache, registry mirror) | B3, B4 | Each model answers on its pod IP | in progress (manifests written; not yet run; registry mirror not started) |
 | B8 | Inference gateway (GIE, InferencePool, EPP, routes) | B7 | Load spreads across MIG replicas by queue/KV state | todo |
 | B9 | Cross-cluster failover | B5, B8 | Model A serves with C1 replicas scaled to 0 | todo |
 | B10 | Soft multi-tenancy on C1 | B8 | Tenant B blocked from disallowed profile; lower priority under load | todo |

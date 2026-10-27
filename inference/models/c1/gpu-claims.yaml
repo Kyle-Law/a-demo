@@ -1,0 +1,47 @@
+# How C1's model servers get accelerators, via DRA (CLAUDE.md decision 10).
+# Templates give every pod its own claim (and so its own slice); the shared ResourceClaim is one
+# claim that several pods reference, so they land on the same device.
+apiVersion: resource.k8s.io/v1
+kind: ResourceClaimTemplate
+metadata:
+  name: mig-2g-20gb
+spec:
+  spec:
+    devices:
+      requests:
+        - name: gpu
+          exactly:
+            deviceClassName: mig.nvidia.com
+            selectors:
+              - cel:
+                  expression: device.attributes['gpu.nvidia.com'].profile == '2g.20gb'
+---
+# embed and rerank share the single 1g.20gb slice. Each caps itself with
+# --gpu-memory-utilization=0.40, so together they use 80% of its 19.5 GiB.
+apiVersion: resource.k8s.io/v1
+kind: ResourceClaim
+metadata:
+  name: mig-1g-20gb-shared
+spec:
+  devices:
+    requests:
+      - name: gpu
+        exactly:
+          deviceClassName: mig.nvidia.com
+          selectors:
+            - cel:
+                expression: device.attributes['gpu.nvidia.com'].profile == '1g.20gb'
+---
+# MI300X through the AMD DRA driver. B4 verifies MI300X support; if it falls back to the AMD
+# device plugin, intellect-3 switches to limits: {amd.com/gpu: 1}.
+apiVersion: resource.k8s.io/v1
+kind: ResourceClaimTemplate
+metadata:
+  name: mi300x
+spec:
+  spec:
+    devices:
+      requests:
+        - name: gpu
+          exactly:
+            deviceClassName: gpu.amd.com

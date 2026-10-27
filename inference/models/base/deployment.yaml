@@ -1,0 +1,88 @@
+# One vLLM server for one model. A model directory (../model-a etc.) supplies the "model"
+# ConfigMap and the full vLLM argument list; a cluster overlay (../c1, ../c2) supplies the
+# accelerator resource and replica count.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate # a GPU or MIG slice can't hold the old and the new pod at the same time
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: vllm
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: vllm
+    spec:
+      terminationGracePeriodSeconds: 60
+      initContainers:
+        # Fetch the pinned revision into the node's model cache, so the server starts offline
+        # and a restart or a second replica on the same node doesn't download again.
+        - name: fetch-model
+          image: vllm/vllm-openai:v0.32.0@sha256:befccf0e7e4089aa23926bb6f887a85c0d46c2a99e6de5c5ffdf5cb7957c5b34
+          command: ["python3", "-c"]
+          args:
+            - |
+              import os
+              from huggingface_hub import snapshot_download
+              snapshot_download(os.environ["MODEL_ID"], revision=os.environ["MODEL_REVISION"])
+          env:
+            - name: MODEL_ID
+              valueFrom: {configMapKeyRef: {name: model, key: MODEL_ID}}
+            - name: MODEL_REVISION
+              valueFrom: {configMapKeyRef: {name: model, key: MODEL_REVISION}}
+            - name: HF_HOME
+              value: /models
+          resources:
+            requests: {cpu: 500m, memory: 1Gi}
+            limits: {memory: 4Gi}
+          volumeMounts:
+            - {name: models, mountPath: /models}
+      containers:
+        - name: vllm
+          image: vllm/vllm-openai:v0.32.0@sha256:befccf0e7e4089aa23926bb6f887a85c0d46c2a99e6de5c5ffdf5cb7957c5b34
+          command: ["vllm", "serve"]
+          args: [] # set by the model directory
+          env:
+            - name: MODEL_ID
+              valueFrom: {configMapKeyRef: {name: model, key: MODEL_ID}}
+            - name: MODEL_REVISION
+              valueFrom: {configMapKeyRef: {name: model, key: MODEL_REVISION}}
+            - name: SERVED_NAME
+              valueFrom: {configMapKeyRef: {name: model, key: SERVED_NAME}}
+            - name: HF_HOME
+              value: /models
+            - name: HF_HUB_OFFLINE
+              value: "1" # weights come from fetch-model; never download at serve time
+          ports:
+            - {name: http, containerPort: 8000}
+          # Loading weights, compiling and capturing CUDA graphs takes minutes; allow 15.
+          startupProbe:
+            httpGet: {path: /health, port: http}
+            periodSeconds: 10
+            failureThreshold: 90
+          readinessProbe:
+            httpGet: {path: /health, port: http}
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: {path: /health, port: http}
+            periodSeconds: 15
+            failureThreshold: 4
+          resources:
+            requests: {cpu: "2", memory: 16Gi}
+            limits: {memory: 32Gi}
+          volumeMounts:
+            - {name: models, mountPath: /models}
+            - {name: shm, mountPath: /dev/shm}
+      volumes:
+        # Per-node model cache. Nodes are disposable, so a node-local cache is enough: the first
+        # pod on a fresh node downloads, later ones reuse it.
+        - name: models
+          hostPath:
+            path: /var/lib/a-demo/models
+            type: DirectoryOrCreate
+        - name: shm
+          emptyDir: {medium: Memory, sizeLimit: 2Gi}

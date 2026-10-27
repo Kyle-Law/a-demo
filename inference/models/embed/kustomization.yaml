@@ -1,0 +1,41 @@
+# Embeddings for the agent's retrieval over runbooks and tickets. Shares the C1 MIG 1g.20gb
+# slice with ../rerank through one ResourceClaim (../c1/gpu-claims.yaml), so each server takes
+# at most 40% of the slice's memory.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../base
+namePrefix: embed-
+labels:
+  - pairs: {model: embed}
+    includeSelectors: true
+configMapGenerator:
+  - name: model
+    literals:
+      - MODEL_ID=Qwen/Qwen3-Embedding-0.6B
+      - MODEL_REVISION=97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3
+      - SERVED_NAME=embed
+patches:
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: vllm
+      spec:
+        template:
+          metadata:
+            annotations:
+              a-demo.io/api: embed # tests/smoke.sh
+          spec:
+            containers:
+              - name: vllm
+                args:
+                  - $(MODEL_ID)
+                  - --revision=$(MODEL_REVISION)
+                  - --served-model-name=$(SERVED_NAME)
+                  - --runner=pooling
+                  - --max-model-len=8192
+                  - --gpu-memory-utilization=0.40
+                resources:
+                  requests: {cpu: "1", memory: 4Gi}
+                  limits: {memory: 8Gi}

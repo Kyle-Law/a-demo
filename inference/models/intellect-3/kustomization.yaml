@@ -1,0 +1,55 @@
+# INTELLECT-3 (106B MoE, 12B active) in FP8 on the C1 MI300X: the large model, and the ops
+# agent's primary LLM (the agent keeps an external fallback). Flags from the model card.
+# Needs B4 (AMD stack) to publish the MI300X; claimed via ../c1/gpu-claims.yaml (mi300x).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../base
+namePrefix: intellect-3-
+labels:
+  - pairs: {model: intellect-3}
+    includeSelectors: true
+images:
+  - name: vllm/vllm-openai
+    newName: vllm/vllm-openai-rocm
+    newTag: v0.32.0
+    digest: sha256:14f6a575e1fb0a580b0f633c09e06f648709d60405b85f6a7ff3f80d49f39905
+configMapGenerator:
+  - name: model
+    literals:
+      - MODEL_ID=PrimeIntellect/INTELLECT-3-FP8
+      - MODEL_REVISION=b7a9f8541b943433776ab1455990324633710b73
+      - SERVED_NAME=intellect-3
+patches:
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: vllm
+      spec:
+        template:
+          metadata:
+            annotations:
+              a-demo.io/api: chat # tests/smoke.sh
+          spec:
+            containers:
+              - name: vllm
+                # 101 GiB of FP8 weights on 192 GB of HBM.
+                args:
+                  - $(MODEL_ID)
+                  - --revision=$(MODEL_REVISION)
+                  - --served-model-name=$(SERVED_NAME)
+                  - --max-model-len=65536
+                  - --gpu-memory-utilization=0.90
+                  - --enable-auto-tool-choice
+                  - --tool-call-parser=qwen3_coder
+                  - --reasoning-parser=deepseek_r1
+                # Reading 101 GiB from disk and warming up takes longer than the base allows.
+                startupProbe:
+                  failureThreshold: 180
+                resources:
+                  requests: {cpu: "8", memory: 64Gi}
+                  limits: {memory: 160Gi}
+            volumes:
+              - name: shm
+                emptyDir: {medium: Memory, sizeLimit: 16Gi}

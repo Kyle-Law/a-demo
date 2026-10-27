@@ -1,0 +1,46 @@
+# Model A: the only model served in both C1 (2x MIG 2g.20gb) and C2 (A6000), so it is the one
+# that load-balances across clusters. Keep this file the single definition: both clusters must
+# run identical flags, or failover changes behaviour (context length, LoRA support).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../base
+namePrefix: model-a-
+labels:
+  - pairs: {model: model-a}
+    includeSelectors: true
+configMapGenerator:
+  - name: model
+    literals:
+      - MODEL_ID=Qwen/Qwen3-4B-Instruct-2507
+      - MODEL_REVISION=cdbee75f17c01a7cc42f958dc650907174af0554
+      - SERVED_NAME=model-a
+patches:
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: vllm
+      spec:
+        template:
+          metadata:
+            annotations:
+              a-demo.io/api: chat # tests/smoke.sh
+          spec:
+            containers:
+              - name: vllm
+                # 7.5 GiB of BF16 weights leaves ~10 GiB of KV cache on a 19.5 GiB slice.
+                args:
+                  - $(MODEL_ID)
+                  - --revision=$(MODEL_REVISION)
+                  - --served-model-name=$(SERVED_NAME)
+                  - --max-model-len=32768
+                  - --gpu-memory-utilization=0.90
+                  - --enable-lora
+                  - --max-loras=4
+                  - --max-lora-rank=64
+                env:
+                  # Adapters are loaded at runtime by the train-to-serve loop (B12). vLLM warns
+                  # this is only safe on a trusted network; B6 limits who can reach the pod.
+                  - name: VLLM_ALLOW_RUNTIME_LORA_UPDATING
+                    value: "True"

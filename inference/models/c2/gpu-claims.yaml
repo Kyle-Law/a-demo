@@ -1,0 +1,12 @@
+# How C2's model server gets the A6000, via DRA (CLAUDE.md decision 10).
+apiVersion: resource.k8s.io/v1
+kind: ResourceClaimTemplate
+metadata:
+  name: a6000
+spec:
+  spec:
+    devices:
+      requests:
+        - name: gpu
+          exactly:
+            deviceClassName: gpu.nvidia.com
