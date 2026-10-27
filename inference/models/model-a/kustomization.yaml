@@ -39,6 +39,10 @@ patches:
                   - --enable-lora
                   - --max-loras=4
                   - --max-lora-rank=64
+                  # Tool calling: model A is the ops agent's second LLM (agent/ops-agent), after
+                  # intellect-3 and before the external fallback. Qwen3 instruct uses the hermes parser.
+                  - --enable-auto-tool-choice
+                  - --tool-call-parser=hermes
                 env:
                   # Adapters are loaded at runtime by the train-to-serve loop (B12). vLLM warns
                   # this is only safe on a trusted network; B6 limits who can reach the pod.
