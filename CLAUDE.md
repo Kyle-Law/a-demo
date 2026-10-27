@@ -57,6 +57,7 @@ Hosts are provisioned by hand (MI300X: HotAisle; CPU/A100/A6000: Prime Intellect
 6. **Agent never holds standing write credentials.** Read-only ServiceAccounts for triage; the executor obtains short-lived, runbook-scoped tokens (Vault Kubernetes secrets engine).
 7. **Agent-authored runbooks are never executable until a human merges the PR.**
 8. **Runbooks live in a separate repo** so the agent's GitHub token is scoped to that repo only.
+   B15 choices (2026-10-27): runbook-scoped short-lived tokens come from **Vault** (Raft storage on a local-path PV on C3, unseal keys kept off Git) via its Kubernetes secrets engine; a human approves `requires_approval` runbooks by commenting `/approve` on the Jira ticket.
 9. **Host WireGuard mesh under everything.** All nodes of all clusters share `wg0` (`172.30.0.0/16`); the wg IP is the node IP. Cilium uses VXLAN over `wg0` with Cilium encryption off. Needed because C1 spans two providers and public IPs may be NATed. Pod CIDRs (`10.{1,2,3}.0.0/16`) and Cilium cluster IDs (1–3) must stay unique for Cluster Mesh.
 10. **GPUs are allocated with DRA wherever supported**, not the device plugin. NVIDIA: GPU Operator in `GPUCluster` (DRA) mode with the host's pre-installed driver; workloads use ResourceClaims against `gpu.nvidia.com` / `mig.nvidia.com`, never `nvidia.com/gpu` or `nvidia.com/mig-*` limits. Pods that share a device (embed + rerank on the 1g slice; vLLM + Slurm on the A6000) reference one shared ResourceClaim; claims are namespaced, so sharers must live in one namespace. MIG is static (host unit); DynamicMIG is alpha and a later demo only. `GPUCluster` cannot coexist with or migrate in place from `ClusterPolicy`, so flipping back means reinstalling the GPU stack. Use the device plugin only where a component can't consume DRA (check Slinky in B11, the AMD DRA driver on MI300X in B4).
 
@@ -74,7 +75,7 @@ chaos/        fault-injection scripts, one per scenario
 docs/         architecture, demo script
 ```
 
-Runbooks: separate repo (TODO: repo URL).
+Runbooks: separate repo, https://github.com/Kyle-Law/a-demo-runbooks (public; `main` protected: PR + `validate` check + code-owner review). Runbook steps are a closed vocabulary of typed actions (schema in that repo), never shell.
 
 ## Building blocks
 
@@ -97,7 +98,7 @@ Track status here. Each block must meet its "done when" before it's marked done.
 | B12 | Train-to-serve loop (LoRA → MinIO → dynamic adapter) | B9, B11 | One command: sbatch → new adapter answering | todo |
 | B13 | Incident intake (Alertmanager → Jira) + chaos scripts | B2 | Each fault yields exactly one ticket | in progress (bridge, routing, 4 ticket rules + chaos scripts written; not yet run) |
 | B14 | Read-only agent (triage + RCA) | B13 | Correct RCA with evidence on every scripted fault | in progress (agent, CI image, read-only identities and C3 Deployment written; not yet run) |
-| B15 | Runbook repo + executor (Vault short-lived tokens, approval gate) | B14 | Merged runbook fixes a fault; ticket auto-closes | todo |
+| B15 | Runbook repo + executor (Vault short-lived tokens, approval gate) | B14 | Merged runbook fixes a fault; ticket auto-closes | in progress (runbooks repo + schema + 3 runbooks done; Vault + executor next) |
 | B16 | Runbook authoring (agent opens PRs) | B15 | Agent PR passes CI; executable after merge | todo |
 
 Build order: vertical slice on C2 first (B0, B3, B7, B8, B2, B13, B14), then C1 hardware, then mesh (B5, B9), then B15–B16, then training (B11–B12), then B6 and B10. Cut B10, then B6, if short on time.

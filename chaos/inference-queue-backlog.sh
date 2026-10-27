@@ -23,7 +23,8 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: chaos-queue-backlog
-  labels: {chaos: queue-backlog}
+  # load-class=batch: the inference-queue-backlog runbook (a-demo-runbooks) sheds batch Jobs.
+  labels: {chaos: queue-backlog, load-class: batch}
 spec:
   backoffLimit: 0
   activeDeadlineSeconds: 1800 # stops by itself after 30 minutes
