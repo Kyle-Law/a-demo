@@ -34,7 +34,11 @@ Check these when renting a machine. The playbook asserts the first three.
 
 ## MIG hosts
 
-Hosts with `mig_enabled: true` (c1-a100) get MIG mode turned on by `roles/nvidia_mig`, which **reboots the host** the first time. MIG mode only takes effect after a GPU reset, and on these VMs the reset always fails ("In use by another client"). GPU Operator's own `WITH_REBOOT` path doesn't work here either: it stops kubelet and never reboots. The slice layout itself is set by GPU Operator's mig-manager (`platform/gpu-operator/`), which needs no reset once MIG mode is on.
+Hosts with `mig_layout` (c1-a100: `14,14,14,15`) get MIG mode turned on by `roles/nvidia_mig`, which **reboots the host** the first time. MIG mode only takes effect after a GPU reset, and on these VMs the reset always fails ("In use by another client").
+
+The slices are created by the same role: a systemd unit, `a-demo-mig-layout`, recreates the layout at every boot before kubelet starts. GPU Operator runs in DRA mode, which has no mig-manager, and the NVIDIA DRA driver only discovers slices that exist when its kubelet plugin starts. MIG mode on with no slices would strand the GPU (nothing advertised).
+
+To change a layout: drain the node, run `nvidia-smi mig -dci && nvidia-smi mig -dgi` on the host, edit `mig_layout`, re-run the playbook, then restart the DRA driver's kubelet-plugin pod on that node.
 
 ## Run
 

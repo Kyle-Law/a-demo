@@ -1,4 +1,4 @@
-# B3: NVIDIA GPU Operator on C2 (A6000; no MIG).
+# B3: NVIDIA GPU Operator in DRA mode (GPUCluster) on C2 (A6000, full GPU).
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -17,9 +17,6 @@ spec:
     - repoURL: https://github.com/Kyle-Law/a-demo.git
       targetRevision: main
       ref: values
-    - repoURL: https://github.com/Kyle-Law/a-demo.git
-      targetRevision: main
-      path: platform/gpu-operator/manifests # MIG layout selection (NodeFeatureRule)
   destination:
     name: c2
     namespace: gpu-operator
@@ -29,4 +26,4 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
-      - ServerSideApply=true # NFD and ClusterPolicy CRDs exceed client-side apply's annotation size limit
+      - ServerSideApply=true # NFD and GPUCluster CRDs exceed client-side apply's annotation size limit

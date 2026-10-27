@@ -1,0 +1,42 @@
+# B3 "done when" on C2: a CUDA test pod on the A6000, allocated through a DRA ResourceClaim.
+# Not synced by Argo CD. Run by hand, then clean up:
+#   kubectl --context c2 get resourceslices -o yaml | grep -E 'productName'   # NVIDIA RTX A6000
+#   kubectl --context c2 apply -f platform/gpu-operator/tests/smoke-c2.yaml
+#   kubectl --context c2 -n gpu-smoke logs gpu
+#   kubectl --context c2 delete -f platform/gpu-operator/tests/smoke-c2.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: gpu-smoke
+---
+apiVersion: resource.k8s.io/v1
+kind: ResourceClaimTemplate
+metadata:
+  name: gpu
+  namespace: gpu-smoke
+spec:
+  spec:
+    devices:
+      requests:
+        - name: gpu
+          exactly:
+            deviceClassName: gpu.nvidia.com
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: gpu
+  namespace: gpu-smoke
+  labels: {app: gpu-smoke}
+spec:
+  restartPolicy: Never
+  resourceClaims:
+    - name: gpu
+      resourceClaimTemplateName: gpu
+  containers:
+    - name: cuda
+      image: nvcr.io/nvidia/k8s/cuda-sample:vectoradd-cuda12.5.0
+      command: ["sh", "-c", "nvidia-smi -L && /cuda-samples/vectorAdd"]
+      resources:
+        claims:
+          - name: gpu

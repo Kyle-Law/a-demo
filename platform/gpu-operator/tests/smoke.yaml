@@ -1,7 +1,9 @@
-# B3 "done when": one CUDA test pod on each MIG slice of the C1 A100 (3x 2g.20gb + 1x 1g.20gb).
-# Not synced by Argo CD. Run by hand, then clean up:
+# B3 "done when" on C1: one CUDA test pod on each MIG slice of the A100 (3x 2g.20gb + 1x 1g.20gb),
+# each allocated through a DRA ResourceClaim. All four run at once, so the scheduler must hand
+# out four distinct slices. Not synced by Argo CD. Run by hand, then clean up:
+#   kubectl --context c1 get resourceslices -o yaml | grep -E 'profile|string: MIG'   # 4 MIG devices
 #   kubectl --context c1 apply -f platform/gpu-operator/tests/smoke.yaml
-#   kubectl --context c1 -n gpu-smoke get pods     # expect 4x Completed
+#   kubectl --context c1 -n gpu-smoke get pods,resourceclaims     # expect 4x Completed, 4 claims
 #   kubectl --context c1 -n gpu-smoke logs -l app=gpu-smoke --prefix
 #   kubectl --context c1 delete -f platform/gpu-operator/tests/smoke.yaml
 apiVersion: v1
@@ -9,62 +11,110 @@ kind: Namespace
 metadata:
   name: gpu-smoke
 ---
-apiVersion: v1
-kind: Pod
+apiVersion: resource.k8s.io/v1
+kind: ResourceClaimTemplate
 metadata:
-  name: mig-2g-a
+  name: mig-2g-20gb
   namespace: gpu-smoke
-  labels: {app: gpu-smoke}
 spec:
-  restartPolicy: Never
-  containers:
-    - name: cuda
-      image: nvcr.io/nvidia/k8s/cuda-sample:vectoradd-cuda12.5.0
-      command: ["sh", "-c", "nvidia-smi -L && /cuda-samples/vectorAdd"]
-      resources:
-        limits: {nvidia.com/mig-2g.20gb: 1}
+  spec:
+    devices:
+      requests:
+        - name: mig
+          exactly:
+            deviceClassName: mig.nvidia.com
+            selectors:
+              - cel:
+                  expression: device.attributes['gpu.nvidia.com'].profile == '2g.20gb'
+---
+apiVersion: resource.k8s.io/v1
+kind: ResourceClaimTemplate
+metadata:
+  name: mig-1g-20gb
+  namespace: gpu-smoke
+spec:
+  spec:
+    devices:
+      requests:
+        - name: mig
+          exactly:
+            deviceClassName: mig.nvidia.com
+            selectors:
+              - cel:
+                  expression: device.attributes['gpu.nvidia.com'].profile == '1g.20gb'
 ---
 apiVersion: v1
 kind: Pod
 metadata:
-  name: mig-2g-b
+  name: mig-2g-a mig-2g-20gb
   namespace: gpu-smoke
   labels: {app: gpu-smoke}
 spec:
   restartPolicy: Never
+  resourceClaims:
+    - name: mig
+      resourceClaimTemplateName: 
   containers:
     - name: cuda
       image: nvcr.io/nvidia/k8s/cuda-sample:vectoradd-cuda12.5.0
-      command: ["sh", "-c", "nvidia-smi -L && /cuda-samples/vectorAdd"]
+      command: ["sh", "-c", "nvidia-smi -L && /cuda-samples/vectorAdd && sleep 60"]
       resources:
-        limits: {nvidia.com/mig-2g.20gb: 1}
+        claims:
+          - name: mig
 ---
 apiVersion: v1
 kind: Pod
 metadata:
-  name: mig-2g-c
+  name: mig-2g-b mig-2g-20gb
   namespace: gpu-smoke
   labels: {app: gpu-smoke}
 spec:
   restartPolicy: Never
+  resourceClaims:
+    - name: mig
+      resourceClaimTemplateName: 
   containers:
     - name: cuda
       image: nvcr.io/nvidia/k8s/cuda-sample:vectoradd-cuda12.5.0
-      command: ["sh", "-c", "nvidia-smi -L && /cuda-samples/vectorAdd"]
+      command: ["sh", "-c", "nvidia-smi -L && /cuda-samples/vectorAdd && sleep 60"]
       resources:
-        limits: {nvidia.com/mig-2g.20gb: 1}
+        claims:
+          - name: mig
 ---
 apiVersion: v1
 kind: Pod
 metadata:
-  name: mig-1g
+  name: mig-2g-c mig-2g-20gb
   namespace: gpu-smoke
   labels: {app: gpu-smoke}
 spec:
   restartPolicy: Never
+  resourceClaims:
+    - name: mig
+      resourceClaimTemplateName: 
   containers:
     - name: cuda
       image: nvcr.io/nvidia/k8s/cuda-sample:vectoradd-cuda12.5.0
-      command: ["sh", "-c", "nvidia-smi -L && /cuda-samples/vectorAdd"]
+      command: ["sh", "-c", "nvidia-smi -L && /cuda-samples/vectorAdd && sleep 60"]
       resources:
-        limits: {nvidia.com/mig-1g.20gb: 1}
+        claims:
+          - name: mig
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: mig-1g mig-1g-20gb
+  namespace: gpu-smoke
+  labels: {app: gpu-smoke}
+spec:
+  restartPolicy: Never
+  resourceClaims:
+    - name: mig
+      resourceClaimTemplateName: 
+  containers:
+    - name: cuda
+      image: nvcr.io/nvidia/k8s/cuda-sample:vectoradd-cuda12.5.0
+      command: ["sh", "-c", "nvidia-smi -L && /cuda-samples/vectorAdd && sleep 60"]
+      resources:
+        claims:
+          - name: mig

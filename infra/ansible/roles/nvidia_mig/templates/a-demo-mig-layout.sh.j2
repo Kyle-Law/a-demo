@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Managed by Ansible (infra/ansible/roles/nvidia_mig). MIG instances don't survive a reboot, and the
+# NVIDIA DRA driver only discovers slices that exist when it starts, so this runs before kubelet.
+set -euo pipefail
+
+if nvidia-smi mig -lgi | grep -q 'MIG '; then
+  echo "GPU instances already exist; leaving them as they are"
+  exit 0
+fi
+nvidia-smi mig -cgi {{ mig_layout }} -C
