@@ -1,0 +1,42 @@
+# B15: C3's first StorageClass (local-path, the default), for Vault's Raft data and audit log.
+# A local-path volume lives on one node's disk and pins its pod to that node; Raft's three copies
+# are the redundancy, not the volume. The chart isn't published to a Helm repo, so Argo CD renders
+# it from the upstream Git tag.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: local-path-provisioner
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/rancher/local-path-provisioner.git
+    targetRevision: v0.0.37
+    path: deploy/chart/local-path-provisioner
+    helm:
+      releaseName: local-path-provisioner
+      valuesObject:
+        helperImage:
+          tag: "1.37.0" # chart default is busybox:latest
+        storageClass:
+          defaultClass: true
+        nodePathMap:
+          - node: DEFAULT_PATH_FOR_NON_LISTED_NODES
+            paths: [/var/lib/local-path-provisioner]
+        configmap:
+          helperPod:
+            # The helper pod creates and removes volume directories on the node that will run the
+            # pod. Vault's third replica runs on the control plane (platform/vault/values.yaml).
+            tolerations:
+              - key: node-role.kubernetes.io/control-plane
+                operator: Exists
+                effect: NoSchedule
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: local-path-storage
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

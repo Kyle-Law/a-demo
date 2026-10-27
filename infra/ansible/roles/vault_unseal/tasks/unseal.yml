@@ -1,0 +1,39 @@
+- name: Read {{ vault_pod }}'s seal status
+  ansible.builtin.command: kubectl --context {{ kube_context }} -n {{ vault_namespace }} exec {{ vault_pod }} -- vault status -format=json
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: vault_pod_status
+  changed_when: false
+  failed_when: vault_pod_status.rc not in [0, 2]
+
+- name: Unseal {{ vault_pod }}
+  when: (vault_pod_status.stdout | from_json).sealed
+  block:
+    - name: Send {{ vault_key_threshold }} key shares to {{ vault_pod }}
+      ansible.builtin.command: >-
+        kubectl --context {{ kube_context }} -n {{ vault_namespace }} exec -i {{ vault_pod }} --
+        vault write -format=json sys/unseal key=-
+      args:
+        stdin: "{{ item }}"
+        stdin_add_newline: false
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      loop: "{{ vault_keys[:vault_key_threshold] }}"
+      no_log: true
+
+    # A joining replica copies the Raft data from the leader before it reports unsealed.
+    - name: Wait for {{ vault_pod }} to report unsealed
+      ansible.builtin.command: kubectl --context {{ kube_context }} -n {{ vault_namespace }} exec {{ vault_pod }} -- vault status -format=json
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      register: vault_pod_unsealed
+      until: vault_pod_unsealed.rc == 0
+      retries: 30
+      delay: 5
+      changed_when: true
+      failed_when: false
+
+    - name: Fail if {{ vault_pod }} is still sealed
+      ansible.builtin.fail:
+        msg: "{{ vault_pod }} is still sealed after unsealing; check its logs (Raft join to vault-0?)."
+      when: vault_pod_unsealed.rc != 0
