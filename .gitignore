@@ -8,3 +8,7 @@ kubeconfig*.yaml
 .terraform/
 *.tfstate
 *.tfstate.*
+# Local credentials (e.g. .jira.env): never commit. This repo is public.
+.env
+*.env
+.env.*
