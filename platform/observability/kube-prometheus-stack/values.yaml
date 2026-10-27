@@ -1,0 +1,15 @@
+# kube-prometheus-stack 92.14.0, shared by the hub (C3, values-hub.yaml) and the agents
+# (C1/C2, values-agent.yaml). See platform/observability/README.md for the push design.
+
+prometheus:
+  prometheusSpec:
+    # Scrape every ServiceMonitor / PodMonitor / rule in the cluster (dcgm-exporter, vLLM, EPP, ...),
+    # not only the ones labelled for this Helm release.
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    probeSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    # The cluster label (labels contract) is stamped on every target at scrape time by a default
+    # scrape class, set per cluster by each Argo CD Application (helm.valuesObject) because Helm
+    # replaces lists instead of merging them. externalLabels would only reach data leaving
+    # Prometheus, so the hub's own targets would have no cluster label in queries.

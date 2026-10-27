@@ -1,0 +1,30 @@
+# Grafana's admin credentials for the hub (platform/observability). Created once with a random
+# password and never stored in Git. Read it with:
+#   kubectl --context c3 -n monitoring get secret grafana-admin -o jsonpath='{.data.admin-password}' | base64 -d
+- name: Create the monitoring namespace
+  ansible.builtin.shell: >-
+    kubectl --context {{ kube_context }} create namespace monitoring --dry-run=client -o yaml
+    | kubectl --context {{ kube_context }} apply -f -
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: grafana_admin_ns
+  changed_when: "' created' in grafana_admin_ns.stdout"
+
+- name: Check for the Grafana admin Secret
+  ansible.builtin.command: kubectl --context {{ kube_context }} -n monitoring get secret grafana-admin
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: grafana_admin_secret
+  changed_when: false
+  failed_when: false
+
+- name: Create the Grafana admin Secret with a random password
+  ansible.builtin.shell: >-
+    kubectl --context {{ kube_context }} -n monitoring create secret generic grafana-admin
+    --from-literal=admin-user=admin
+    --from-literal=admin-password="$(openssl rand -base64 24)"
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  when: grafana_admin_secret.rc != 0
+  changed_when: true
+  no_log: true

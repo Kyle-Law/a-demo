@@ -84,7 +84,7 @@ Track status here. Each block must meet its "done when" before it's marked done.
 |---|---|---|---|---|
 | B0 | Provisioning (Ansible, kubeadm, Cilium) | — | `cilium status` green on all 3 clusters | in progress (C2 verified 2026-10-27; C1, C3 pending) |
 | B1 | GitOps hub (Argo CD on C3) | B0 | Git change lands on all 3 clusters | in progress (manifests written; not yet run) |
-| B2 | Observability baseline | B1 | One dashboard shows all clusters' nodes | todo |
+| B2 | Observability baseline (push to C3: Prometheus agents + Alloy → Prometheus + Loki + Grafana) | B1 | One dashboard shows all clusters' nodes | in progress (part 1, hub on C3, written; not yet run) |
 | B3 | NVIDIA stack (GPU Operator in DRA mode, static MIG, DCGM) | B1 | C1's ResourceSlice has 3x 2g.20gb + 1x 1g.20gb MIG devices, C2's the A6000; a claim-based test pod runs on each | in progress (device-plugin variant verified on hardware 2026-10-27; DRA variant not yet run) |
 | B4 | AMD stack (AMD DRA driver if it supports MI300X, else AMD GPU Operator; exporter) | B1 | MI300X allocatable (ResourceSlice, or `amd.com/gpu` as fallback); ROCm smoke pod runs | todo |
 | B5 | Cluster Mesh + Hubble Relay | B0 | Echo global service fails over C1→C2, visible in Hubble | todo |

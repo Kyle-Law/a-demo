@@ -12,3 +12,4 @@
   become: true
   roles:
     - argocd_hub
+    - grafana_admin # B2: Grafana's admin Secret, before Argo CD syncs the hub's monitoring stack

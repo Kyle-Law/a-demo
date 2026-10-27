@@ -1,0 +1,19 @@
+# Log-push target for Grafana Alloy on C1/C2/C3 (B2 part 2), reached over the WireGuard mesh at
+# http://172.30.3.10:31100/loki/api/v1/push. A separate Service because the Loki chart can't pin
+# a nodePort; ufw keeps NodePorts off the public interfaces.
+apiVersion: v1
+kind: Service
+metadata:
+  name: loki-ingest
+  namespace: monitoring
+spec:
+  type: NodePort
+  selector:
+    app.kubernetes.io/name: loki
+    app.kubernetes.io/instance: loki
+    app.kubernetes.io/component: single-binary
+  ports:
+    - name: http
+      port: 3100
+      targetPort: 3100
+      nodePort: 31100
