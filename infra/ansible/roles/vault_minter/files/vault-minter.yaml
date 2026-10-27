@@ -1,0 +1,51 @@
+# B15: the identity Vault's Kubernetes secrets engine uses on this cluster. It can create and
+# delete ServiceAccounts, their tokens and RoleBindings, and bind only the runbook ClusterRoles
+# (the bind verb on named roles, so it never holds the runbook permissions itself and can't
+# grant anything else).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: vault-minter
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: vault-minter
+rules:
+  - apiGroups: [""]
+    resources: [serviceaccounts]
+    verbs: [get, create, delete]
+  - apiGroups: [""]
+    resources: [serviceaccounts/token]
+    verbs: [create]
+  - apiGroups: [rbac.authorization.k8s.io]
+    resources: [rolebindings]
+    verbs: [get, create, delete]
+  - apiGroups: [rbac.authorization.k8s.io]
+    resources: [clusterroles]
+    verbs: [bind]
+    resourceNames: [runbook-gitops-operator, runbook-inference-pod-janitor, runbook-inference-job-janitor]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: vault-minter
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: vault-minter
+subjects:
+  - kind: ServiceAccount
+    name: vault-minter
+    namespace: kube-system
+---
+# Long-lived token, like argocd-manager's; rotate by deleting it and re-running gitops.yml --tags vault.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: vault-minter-token
+  namespace: kube-system
+  annotations:
+    kubernetes.io/service-account.name: vault-minter
+type: kubernetes.io/service-account-token

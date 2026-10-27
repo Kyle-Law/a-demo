@@ -1,4 +1,5 @@
-# Tests for everything with code (B13 bridge + rule contracts, B14 agent), and the ops-agent image.
+# Tests for everything with code (B13 bridge + rule contracts, B14 agent, B15 Vault role contract),
+# and the ops-agent image.
 name: ci
 
 on:
@@ -24,6 +25,8 @@ jobs:
       - name: Ops agent (B14)
         working-directory: agent/ops-agent
         run: pytest -q
+      - name: Vault runbook-role contract (B15)
+        run: pytest -q platform/vault/tests
 
   ops-agent-image:
     needs: test

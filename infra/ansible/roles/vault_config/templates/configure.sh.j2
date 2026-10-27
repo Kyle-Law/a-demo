@@ -1,0 +1,50 @@
+{# Runs inside vault-0 (roles/vault_config), with VAULT_TOKEN already read from stdin. Writes are
+   declarative, so re-running converges; it prints "changed" when it enabled a mount. The minter
+   tokens and CAs go through mode-0600 temp files, never through command arguments. #}
+set -eu
+umask 077
+changed=""
+
+# The executor logs in with its ServiceAccount token (audience "{{ runbook.executor.audience }}").
+vault auth list -format=json | grep -q '"kubernetes/"' || { vault auth enable kubernetes; changed=1; }
+vault write auth/kubernetes/config kubernetes_host=https://kubernetes.default.svc
+vault policy write runbook-executor - <<'HCL'
+# Generated from platform/vault/runbook-roles.yaml: creds for each listed (cluster, role), nothing else.
+{% for role, spec in runbook.roles.items() %}
+{% for cluster in spec.clusters %}
+path "kubernetes-{{ cluster }}/creds/{{ role }}" {
+  capabilities = ["update"]
+}
+{% endfor %}
+{% endfor %}
+HCL
+vault write auth/kubernetes/role/runbook-executor \
+  bound_service_account_names={{ runbook.executor.service_account }} \
+  bound_service_account_namespaces={{ runbook.executor.namespace }} \
+  audience={{ runbook.executor.audience }} \
+  token_policies=runbook-executor token_ttl=15m token_max_ttl=30m
+
+{% for host in vault_minter_hosts %}
+{% set cluster = hostvars[host].cluster_name %}
+# {{ cluster }}
+vault secrets list -format=json | grep -q '"kubernetes-{{ cluster }}/"' \
+  || { vault secrets enable -path=kubernetes-{{ cluster }} kubernetes; changed=1; }
+jwt=$(mktemp); ca=$(mktemp)
+printf '%s' '{{ hostvars[host].vault_minter_token }}' > "$jwt" # builtin: no process sees it
+cat > "$ca" <<'PEM'
+{{ hostvars[host].vault_minter_ca | trim }}
+PEM
+vault write kubernetes-{{ cluster }}/config \
+  kubernetes_host={{ 'https://kubernetes.default.svc' if cluster == 'c3' else 'https://' ~ hostvars[host].wg_ip ~ ':6443' }} \
+  kubernetes_ca_cert=@"$ca" service_account_jwt=@"$jwt" disable_local_ca_jwt=true
+rm -f "$jwt" "$ca"
+{% for role, spec in runbook.roles.items() if cluster in spec.clusters %}
+vault write kubernetes-{{ cluster }}/roles/{{ role }} \
+  kubernetes_role_type=ClusterRole kubernetes_role_name=runbook-{{ role }} \
+  allowed_kubernetes_namespaces={{ spec.namespaces | join(',') }} \
+  token_default_ttl={{ runbook.token_ttl }} token_max_ttl={{ runbook.token_max_ttl }} \
+  name_template='{{ vault_sa_name_template }}'
+{% endfor %}
+{% endfor %}
+
+echo "${changed:+changed}"

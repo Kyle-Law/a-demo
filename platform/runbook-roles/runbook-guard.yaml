@@ -1,0 +1,38 @@
+# B15: a gitops-operator token may patch the model Applications, but RBAC can't say which fields.
+# Without this policy it could point an Application at another repo or cluster and deploy anything.
+# Runbook tokens (ServiceAccounts named runbook-*, see Vault's name_template) may change only
+# spec.syncPolicy and the top-level operation field (a sync request).
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: runbook-application-scope
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [argoproj.io]
+        apiVersions: ["*"]
+        operations: [UPDATE]
+        resources: [applications]
+  matchConditions:
+    - name: runbook-token
+      expression: request.userInfo.username.startsWith('system:serviceaccount:argocd:runbook-')
+  validations:
+    - expression: >-
+        object.spec.project == oldObject.spec.project &&
+        object.spec.destination == oldObject.spec.destination &&
+        has(object.spec.source) == has(oldObject.spec.source) &&
+        (!has(object.spec.source) || object.spec.source == oldObject.spec.source) &&
+        has(object.spec.sources) == has(oldObject.spec.sources) &&
+        (!has(object.spec.sources) || object.spec.sources == oldObject.spec.sources) &&
+        has(object.spec.ignoreDifferences) == has(oldObject.spec.ignoreDifferences) &&
+        (!has(object.spec.ignoreDifferences) || object.spec.ignoreDifferences == oldObject.spec.ignoreDifferences)
+      message: runbook tokens may change only an Application's syncPolicy and request a sync
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: runbook-application-scope
+spec:
+  policyName: runbook-application-scope
+  validationActions: [Deny]

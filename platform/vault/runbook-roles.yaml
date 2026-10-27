@@ -1,0 +1,24 @@
+# Which runbook required_role Vault may mint a token for, on which clusters and in which
+# namespaces. infra/ansible roles/vault_config turns this into one Kubernetes secrets engine role
+# per (cluster, role) and the executor's policy; what a role may do is its ClusterRole
+# runbook-<role> in platform/runbook-roles. A runbook whose required_role isn't here can't run.
+token_ttl: 10m # a runbook's steps plus verify; the executor asks again if a run takes longer
+token_max_ttl: 20m
+
+roles:
+  gitops-operator: # Argo CD Applications live on the hub
+    clusters: [c3]
+    namespaces: [argocd]
+  inference-pod-janitor:
+    clusters: [c1, c2]
+    namespaces: [inference]
+  inference-job-janitor:
+    clusters: [c1, c2]
+    namespaces: [inference]
+
+# The executor's own identity, authenticated with Kubernetes auth on C3 (decision 6: read and
+# execute are separate identities; the ops agent has no Vault access at all).
+executor:
+  service_account: runbook-executor
+  namespace: ops
+  audience: vault

@@ -1,0 +1,26 @@
+# B15: configures Vault from platform/vault/runbook-roles.yaml: Kubernetes auth for the executor,
+# its policy, and one Kubernetes secrets engine per cluster whose minter ran in this playbook run
+# (roles/vault_minter). Runs after roles/vault_unseal, which loads the root token.
+- name: Read the runbook roles Vault may mint
+  ansible.builtin.set_fact:
+    runbook: "{{ lookup('ansible.builtin.file', vault_runbook_roles_file) | from_yaml }}"
+    vault_minter_hosts: >-
+      {{ groups['control_plane'] | zip(groups['control_plane'] | map('extract', hostvars))
+         | selectattr('1.vault_minter_token', 'defined') | map(attribute='0') | list }}
+
+- name: Note clusters left out of this run
+  ansible.builtin.debug:
+    msg: "No minter token from {{ item }} in this run: its secrets engine is unchanged. Re-run once it's up."
+  loop: "{{ groups['control_plane'] | difference(vault_minter_hosts) }}"
+
+- name: Configure Vault
+  ansible.builtin.command: >-
+    kubectl --context {{ kube_context }} -n {{ vault_namespace }} exec -i vault-0 --
+    sh -c 'read -r VAULT_TOKEN; export VAULT_TOKEN; exec sh -s'
+  args:
+    stdin: "{{ vault_root_token }}\n{{ lookup('ansible.builtin.template', 'configure.sh.j2') }}"
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: vault_configure
+  changed_when: "'changed' in vault_configure.stdout"
+  no_log: true
