@@ -1,5 +1,5 @@
-# Tests for everything with code (B13 bridge + rule contracts, B14 agent, B15 Vault role contract),
-# and the ops-agent image.
+# Tests for everything with code (B13 bridge + rule contracts, B14 agent, B15 Vault role contract and
+# executor), and the ops-agent and runbook-executor images.
 name: ci
 
 on:
@@ -19,7 +19,7 @@ jobs:
         with:
           python-version: "3.13"
       - name: Install test dependencies
-        run: pip install pytest==8.4.2 pyyaml==6.0.3 -r agent/ops-agent/requirements.txt
+        run: pip install pytest==8.4.2 -r agent/ops-agent/requirements.txt -r agent/runbook-executor/requirements.txt
       - name: Alert bridge and ticket-rule contract (B13)
         run: pytest -q agent/alert-bridge/tests
       - name: Ops agent (B14)
@@ -27,16 +27,22 @@ jobs:
         run: pytest -q
       - name: Vault runbook-role contract (B15)
         run: pytest -q platform/vault/tests
+      - name: Runbook executor (B15)
+        working-directory: agent/runbook-executor
+        run: pytest -q
 
-  ops-agent-image:
+  image:
     needs: test
     if: github.event_name == 'push'
     runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        name: [ops-agent, runbook-executor] # agent/<name>, ghcr.io/kyle-law/a-demo-<name>
     permissions:
       contents: read
       packages: write
     env:
-      IMAGE: ghcr.io/kyle-law/a-demo-ops-agent
+      IMAGE: ghcr.io/kyle-law/a-demo-${{ matrix.name }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
@@ -50,7 +56,7 @@ jobs:
       - name: Version tag, unless it exists already
         id: version
         run: |
-          version=$(python3 -c 'import tomllib; print(tomllib.load(open("agent/ops-agent/pyproject.toml","rb"))["project"]["version"])')
+          version=$(python3 -c 'import tomllib; print(tomllib.load(open("agent/${{ matrix.name }}/pyproject.toml","rb"))["project"]["version"])')
           if docker buildx imagetools inspect "$IMAGE:$version" >/dev/null 2>&1; then
             echo "tag=" >> "$GITHUB_OUTPUT"; echo "$IMAGE:$version exists; pushing only the sha tag"
           else
@@ -65,7 +71,7 @@ jobs:
             ${{ steps.version.outputs.tag }}
       - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
-          context: agent/ops-agent
+          context: agent/${{ matrix.name }}
           platforms: linux/amd64
           push: true
           tags: ${{ steps.meta.outputs.tags }}

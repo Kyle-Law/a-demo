@@ -1,0 +1,29 @@
+apiVersion: a-demo.io/v1
+id: pod-unschedulable
+title: Remove a stray pod whose GPU claim can never be satisfied
+description: |
+  A pod nothing manages (no Deployment, Job or other owner) asks for a GPU no free device can
+  satisfy, typically a hand-made test pod claiming a MIG slice that is already taken. Deleting it is
+  safe because no controller will recreate it; pods with an owner are refused by the action itself.
+matches:
+  signals: [PodUnschedulable]
+  resource: "^pod/.+"
+  clusters: [c1, c2]
+required_role: inference-pod-janitor
+requires_approval: true
+preconditions:
+  - name: the pod is still unschedulable
+    promql: kube_pod_status_unschedulable{cluster="{{cluster}}", namespace="{{namespace}}", pod="{{name}}"} == 1
+    expect: nonempty
+steps:
+  - action: k8s.delete_unowned_pod
+    namespace: "{{namespace}}"
+    name: "{{name}}"
+verify:
+  - name: the pod is gone
+    promql: kube_pod_status_unschedulable{cluster="{{cluster}}", namespace="{{namespace}}", pod="{{name}}"} == 1
+    expect: empty
+    within: 5m
+rollback:
+  - action: notify
+    message: "{{name}} is still unschedulable after deletion was requested; a controller may own it after all."
