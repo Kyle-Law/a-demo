@@ -1,0 +1,80 @@
+# The runbook executor (agent/runbook-executor). It talks to Jira, the hub's Prometheus, GitHub (the
+# runbooks repo), Vault, and each cluster's API with the tokens Vault mints for a run.
+# Bootstrapped by infra/ansible (never in Git): jira-credentials (B13) and the
+# runbook-executor-clusters ConfigMap (roles/vault_config: API endpoints and CAs).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: runbook-executor
+  labels:
+    app: runbook-executor
+spec:
+  replicas: 1 # one poller, so a runbook never runs twice at once
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: runbook-executor
+  template:
+    metadata:
+      labels:
+        app: runbook-executor
+        cluster: c3
+        tenant: platform
+    spec:
+      serviceAccountName: runbook-executor
+      automountServiceAccountToken: false # no Kubernetes API token; only the Vault-audience one below
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: executor
+          image: ghcr.io/kyle-law/a-demo-runbook-executor:0.1.0 # built by .github/workflows/ci.yml when this version lands on main
+          args: ["run"]
+          env:
+            - name: VAULT_ADDR
+              value: http://vault-active.vault.svc:8200
+            - name: VAULT_JWT_PATH
+              value: /var/run/secrets/vault/token
+            - name: EXECUTOR_CLUSTERS_DIR
+              value: /etc/runbook-executor/clusters
+            # Jira accountIds allowed to /approve (comma-separated). Empty: anyone except the
+            # executor's own Jira account.
+            - name: EXECUTOR_APPROVERS
+              value: ""
+          envFrom:
+            - secretRef:
+                name: jira-credentials
+          resources:
+            requests:
+              cpu: 20m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: vault-token
+              mountPath: /var/run/secrets/vault
+              readOnly: true
+            - name: clusters
+              mountPath: /etc/runbook-executor/clusters
+              readOnly: true
+      volumes:
+        # Accepted only by Vault (audience), and short-lived; the kubelet refreshes it.
+        - name: vault-token
+          projected:
+            sources:
+              - serviceAccountToken:
+                  audience: vault
+                  expirationSeconds: 600
+                  path: token
+        - name: clusters
+          configMap:
+            name: runbook-executor-clusters

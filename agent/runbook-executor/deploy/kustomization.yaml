@@ -1,0 +1,7 @@
+# B15: the runbook executor on C3. Synced by clusters/c3/runbook-executor.yaml.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: ops
+resources:
+  - serviceaccount.yaml
+  - deployment.yaml

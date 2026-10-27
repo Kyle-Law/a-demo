@@ -8,6 +8,16 @@
       {{ groups['control_plane'] | zip(groups['control_plane'] | map('extract', hostvars))
          | selectattr('1.vault_minter_token', 'defined') | map(attribute='0') | list }}
 
+# One API endpoint per cluster, for Vault's secrets engines and the executor alike: the hub's own
+# API in-cluster, the spokes over the WireGuard mesh (like Argo CD).
+- name: Work out each cluster's API endpoint
+  ansible.builtin.set_fact:
+    vault_cluster_endpoints: >-
+      {{ vault_cluster_endpoints | default({}) | combine({hostvars[item].cluster_name:
+         'https://kubernetes.default.svc' if hostvars[item].cluster_name == 'c3'
+         else 'https://' ~ hostvars[item].wg_ip ~ ':6443'}) }}
+  loop: "{{ vault_minter_hosts }}"
+
 - name: Note clusters left out of this run
   ansible.builtin.debug:
     msg: "No minter token from {{ item }} in this run: its secrets engine is unchanged. Re-run once it's up."
@@ -24,3 +34,43 @@
   register: vault_configure
   changed_when: "'changed' in vault_configure.stdout"
   no_log: true
+
+# B15: where the runbook executor finds each cluster's API and CA (agent/runbook-executor reads
+# endpoints.json and <cluster>.crt). Not secret, but generated per cluster at kubeadm init, so it
+# can't live in Git.
+- name: Create the ops namespace
+  ansible.builtin.shell: >-
+    kubectl --context {{ kube_context }} create namespace ops --dry-run=client -o yaml
+    | kubectl --context {{ kube_context }} apply -f -
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: vault_config_ops_ns
+  changed_when: "' created' in vault_config_ops_ns.stdout"
+
+# Merged with what's there, so a run that reaches only some clusters keeps the others' entries.
+- name: Read the current ops/runbook-executor-clusters
+  ansible.builtin.command: >-
+    kubectl --context {{ kube_context }} -n ops get configmap runbook-executor-clusters
+    -o jsonpath={.data} --ignore-not-found
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: vault_config_clusters_current
+  changed_when: false
+
+- name: Apply ops/runbook-executor-clusters
+  ansible.builtin.command: kubectl --context {{ kube_context }} apply -f -
+  args:
+    stdin: >-
+      {{ {'apiVersion': 'v1', 'kind': 'ConfigMap',
+          'metadata': {'name': 'runbook-executor-clusters', 'namespace': 'ops'},
+          'data': current
+                  | combine({'endpoints.json': (current['endpoints.json'] | default('{}') | from_json)
+                                               | combine(vault_cluster_endpoints) | to_json})
+                  | combine(dict(vault_minter_hosts | map('extract', hostvars, 'cluster_name') | map('regex_replace', '$', '.crt')
+                                 | zip(vault_minter_hosts | map('extract', hostvars, 'vault_minter_ca'))))} | to_json }}
+  vars:
+    current: "{{ vault_config_clusters_current.stdout | default('{}', true) | from_json }}"
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: vault_config_clusters_apply
+  changed_when: "' created' in vault_config_clusters_apply.stdout or ' configured' in vault_config_clusters_apply.stdout"
