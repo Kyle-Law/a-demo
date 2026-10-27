@@ -1,0 +1,19 @@
+# One llm-d router per chat model: an InferencePool selecting the model's vLLM pods (label
+# model=<name>, port 8000) plus its Endpoint Picker (EPP). Chart llm-d-router-gateway v1.0.0,
+# pinned in clusters/<c>/inference-pools.yaml, which also sets the release name (= pool name) and
+# router.modelServers.matchLabels.model for each model.
+#
+# The EPP keeps the chart's default scheduling profile: it scrapes every replica's vLLM /metrics
+# and scores queue depth (weight 2), KV-cache utilization (2) and prefix-cache hits (3).
+
+provider:
+  name: none # agentgateway handles InferencePools natively; no GKE/Istio objects
+
+httpRoute:
+  create: false # inference/gateways owns the routes: one HTTPRoute, a header match per model
+
+router:
+  epp:
+    resources:
+      requests: {cpu: 100m, memory: 128Mi}
+      limits: {memory: 512Mi}

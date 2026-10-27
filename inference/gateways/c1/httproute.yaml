@@ -1,0 +1,52 @@
+# Model-aware routing, step 2 (C1): the header set by ../base/model-routing.yaml picks the backend.
+# Chat models go to their InferencePool, whose EPP picks the replica by queue / KV-cache / prefix
+# state. embed and rerank have one replica each and nothing to choose between, so they go
+# straight to their Service.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: models
+spec:
+  parentRefs:
+    - {group: gateway.networking.k8s.io, kind: Gateway, name: inference-gateway}
+  rules:
+    - matches:
+        - path: {type: PathPrefix, value: /v1/}
+          headers:
+            - {type: Exact, name: X-Gateway-Base-Model-Name, value: model-a}
+      backendRefs:
+        - {group: inference.networking.k8s.io, kind: InferencePool, name: model-a}
+      timeouts:
+        request: 300s
+    - matches:
+        - path: {type: PathPrefix, value: /v1/}
+          headers:
+            - {type: Exact, name: X-Gateway-Base-Model-Name, value: model-b}
+      backendRefs:
+        - {group: inference.networking.k8s.io, kind: InferencePool, name: model-b}
+      timeouts:
+        request: 300s
+    - matches:
+        - path: {type: PathPrefix, value: /v1/}
+          headers:
+            - {type: Exact, name: X-Gateway-Base-Model-Name, value: intellect-3}
+      backendRefs:
+        - {group: inference.networking.k8s.io, kind: InferencePool, name: intellect-3}
+      timeouts:
+        request: 600s
+    - matches:
+        - path: {type: PathPrefix, value: /v1/}
+          headers:
+            - {type: Exact, name: X-Gateway-Base-Model-Name, value: embed}
+      backendRefs:
+        - {kind: Service, name: embed-vllm, port: 8000}
+      timeouts:
+        request: 60s
+    - matches:
+        - path: {type: PathPrefix, value: /v1/}
+          headers:
+            - {type: Exact, name: X-Gateway-Base-Model-Name, value: rerank}
+      backendRefs:
+        - {kind: Service, name: rerank-vllm, port: 8000}
+      timeouts:
+        request: 60s

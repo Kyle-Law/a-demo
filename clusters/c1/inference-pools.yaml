@@ -1,0 +1,44 @@
+# B8: one llm-d router (InferencePool + EPP) per chat model on C1. The release name is the pool
+# name the HTTPRoute in inference/gateways/c1 points at.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: inference-pools-c1
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - list:
+        elements:
+          - model: model-a
+          - model: model-b
+          - model: intellect-3
+  template:
+    metadata:
+      name: "pool-{{ .model }}-c1"
+    spec:
+      project: default
+      sources:
+        - repoURL: ghcr.io/llm-d/charts # OCI registry
+          chart: llm-d-router-gateway
+          targetRevision: v1.0.0
+          helm:
+            releaseName: "{{ .model }}"
+            valueFiles:
+              - $values/inference/pools/values.yaml
+            parameters:
+              - name: router.modelServers.matchLabels.model
+                value: "{{ .model }}"
+        - repoURL: https://github.com/Kyle-Law/a-demo.git
+          targetRevision: main
+          ref: values
+      destination:
+        name: c1
+        namespace: inference
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - SkipDryRunOnMissingResource=true # InferencePool CRD comes from gateway-api-crds-c1

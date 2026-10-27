@@ -50,7 +50,7 @@ Hosts are provisioned by hand (MI300X: HotAisle; CPU/A100/A6000: Prime Intellect
 ## Key design decisions (don't undo without discussion)
 
 1. **Two-tier routing.** Each GPU cluster has its own Gateway + InferencePool + EPP. Cross-cluster balancing uses a Cilium global Service in front of the *gateways* with `service.cilium.io/affinity: local`. Do not point a global Service directly at model pods — it bypasses the EPP. InferencePoolImport is alpha; do not depend on it.
-2. **Gateway implementation** is an ext-proc-capable gateway (Envoy Gateway / kgateway / agentgateway). Cilium is the CNI only; do not use Cilium's built-in Gateway API controller for InferencePools.
+2. **Gateway implementation is agentgateway** (v1.6; GIE-conformant, while Envoy Gateway and kgateway are not on GIE v1.6.2's conformant list). Cilium is the CNI only; do not use Cilium's built-in Gateway API controller for InferencePools. Model selection uses an `AgentgatewayPolicy` (PreRouting CEL copies the body's `model` into `X-Gateway-Base-Model-Name` through an allowlist map) plus standard HTTPRoutes matching that header; no payload processor. Replica selection is a per-model InferencePool plus the llm-d router EPP (the EPP moved from GIE to `llm-d/llm-d-router` in GIE v1.6).
 3. **Model A runs in both C1 and C2** — it's the only model that load-balances across clusters.
 4. **A100 has no FP8 tensor cores.** Use BF16 (≤4B) or AWQ/GPTQ on MIG slices. FP8 is fine on MI300X.
 5. **Egress gateway is per-cluster** (Cilium requires the gateway node to be in the same cluster as the selected pods). Avoid HTTP L7 policies on egress-gateway flows.
@@ -90,7 +90,7 @@ Track status here. Each block must meet its "done when" before it's marked done.
 | B5 | Cluster Mesh + Hubble Relay | B0 | Echo global service fails over C1→C2, visible in Hubble | todo |
 | B6 | Egress gateways + default-deny + FQDN allowlist | B5 | Agent ns reaches only Jira/GitHub/LLM API | todo |
 | B7 | Model serving (vLLM CUDA/ROCm, model cache, registry mirror) | B3, B4 | Each model answers on its pod IP | in progress (manifests written; not yet run; registry mirror not started) |
-| B8 | Inference gateway (GIE, InferencePool, EPP, routes) | B7 | Load spreads across MIG replicas by queue/KV state | todo |
+| B8 | Inference gateway (GIE, InferencePool, EPP, routes) | B7 | Load spreads across MIG replicas by queue/KV state | in progress (manifests written; not yet run) |
 | B9 | Cross-cluster failover | B5, B8 | Model A serves with C1 replicas scaled to 0 | todo |
 | B10 | Soft multi-tenancy on C1 | B8 | Tenant B blocked from disallowed profile; lower priority under load | todo |
 | B11 | Slinky (operator, slurmdbd, GRES, Pyxis/Enroot, DCGM prolog) | B3 | Containerized GPU job runs; failed diag drains node | todo |
