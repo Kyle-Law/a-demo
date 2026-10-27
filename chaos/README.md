@@ -8,6 +8,7 @@ script undoes its fault with `--revert`. They change live clusters, so run them 
 | `model-server-crashloop.sh` | model-b crash-loops (an invalid vLLM flag). Pauses Argo CD auto-sync first, or self-heal would undo it in seconds; `--revert` resumes it and Git heals the Deployment | `ModelServerDown` → `c1/inference/deployment/model-b-vllm` | ~2–3 min |
 | `inference-queue-backlog.sh` | A Job keeps 256 long model-a requests in flight through the gateway | `InferenceQueueBacklog` → `<c>/inference/deployment/model-a-vllm` | ~2–3 min |
 | `gpu-claim-pending.sh` | A standalone pod claims a 2g.20gb slice when all three are taken | `PodUnschedulable` → `c1/inference/pod/chaos-gpu-claim` | ~3–4 min |
+| `stray-inference-pod.sh` | A hand-made pod with no controller keeps running in `inference` (no runbook yet: the B16 demo) | `StrayInferencePod` → `<c>/inference/pod/chaos-stray-pod` | ~5–6 min |
 | `node-not-ready.sh` | kubelet stopped on a GPU node (through the Ansible inventory) | `NodeNotReady` → `<c>/cluster-scoped/node/<host>` | ~2–3 min |
 
 The rules are in `platform/observability/rules/ticket-rules.yaml`, evaluated on the hub Prometheus (C3).
