@@ -1,0 +1,74 @@
+# Alertmanager webhook -> Jira ticket bridge. Python stdlib only, so it runs on the stock python
+# image with the code mounted from a ConfigMap. Jira credentials come from the "jira-credentials"
+# Secret that infra/ansible/gitops.yml creates from the git-ignored .jira.env (never in Git).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alert-bridge
+  labels:
+    app: alert-bridge
+spec:
+  replicas: 1 # one writer, so two notifications for the same resource can't race to two tickets
+  selector:
+    matchLabels:
+      app: alert-bridge
+  template:
+    metadata:
+      labels:
+        app: alert-bridge
+        cluster: c3
+        tenant: platform
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: bridge
+          image: python:3.13-slim@sha256:81c118faaca296a46b46a7dd7f3bf7575a956d8a4af22623b3de2ff504a3e89b
+          command: ["python", "-u", "/app/bridge.py"]
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: PYTHONDONTWRITEBYTECODE
+              value: "1"
+            - name: JIRA_ISSUE_TYPE
+              value: Task
+            - name: JIRA_TRIAGE_LABEL
+              value: ai-triage
+          envFrom:
+            - secretRef:
+                name: jira-credentials
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: code
+              mountPath: /app
+              readOnly: true
+      volumes:
+        - name: code
+          configMap:
+            name: alert-bridge-code

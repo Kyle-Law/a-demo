@@ -13,3 +13,4 @@
   roles:
     - argocd_hub
     - grafana_admin # B2: Grafana's admin Secret, before Argo CD syncs the hub's monitoring stack
+    - jira_credentials # B13: the alert bridge's Jira Secret, from the git-ignored .jira.env

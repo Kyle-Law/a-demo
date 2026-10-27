@@ -35,3 +35,40 @@ grafana:
       uid: loki
       url: http://loki.monitoring.svc:3100
       access: proxy
+
+alertmanager:
+  # B13: alerts labelled ticket="true" go to the Jira bridge (agent/alert-bridge), everything else
+  # to "null" (visible in Alertmanager and Grafana, but no ticket). Lists here replace the chart
+  # defaults, so the full set is restated.
+  config:
+    route:
+      # One notification group per affected resource: the alert -> ticket contract key.
+      group_by: [cluster, namespace, resource]
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 4h
+      receiver: "null"
+      routes:
+        - receiver: "null"
+          matchers: ['alertname = "Watchdog"']
+        - receiver: jira-bridge
+          matchers: ['ticket = "true"']
+    receivers:
+      - name: "null"
+      - name: jira-bridge
+        webhook_configs:
+          - url: http://alert-bridge.ops.svc:8080/alertmanager
+            send_resolved: true
+    # The chart's defaults with cluster added: without it, a critical alert in one cluster would
+    # inhibit the same warning in another, because every cluster's alerts meet here.
+    inhibit_rules:
+      - source_matchers: ['severity = critical']
+        target_matchers: ['severity =~ warning|info']
+        equal: [cluster, namespace, alertname]
+      - source_matchers: ['severity = warning']
+        target_matchers: ['severity = info']
+        equal: [cluster, namespace, alertname]
+      - source_matchers: ['alertname = InfoInhibitor']
+        target_matchers: ['severity = info']
+        equal: [cluster, namespace]
+      - target_matchers: ['alertname = InfoInhibitor']
